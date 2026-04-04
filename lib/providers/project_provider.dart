@@ -194,6 +194,101 @@ class ProjectProvider extends ChangeNotifier {
     return true;
   }
 
+  Future<bool> duplicateActiveScreen() async {
+    final project = activeProject;
+    final screen = activeScreen;
+    if (project == null || screen == null) {
+      return false;
+    }
+
+    final duplicatedComponents = screen.components
+        .map(
+          (component) => component.copyWith(
+            id: IdGenerator.next('component'),
+            properties: Map<String, dynamic>.from(component.properties),
+          ),
+        )
+        .toList();
+
+    final duplicatedScreen = ScreenModel(
+      id: IdGenerator.next('screen'),
+      name: '${screen.name} (copie)',
+      components: duplicatedComponents,
+      backgroundColor: screen.backgroundColor,
+    );
+
+    final index = project.screens.indexWhere((s) => s.id == screen.id);
+    final updatedScreens = [...project.screens];
+    updatedScreens.insert(index + 1, duplicatedScreen);
+    final updatedProject = project.copyWith(screens: updatedScreens);
+
+    _replaceProject(updatedProject);
+    _setEditorContext(
+      projectId: updatedProject.id,
+      screenId: duplicatedScreen.id,
+      componentId: null,
+    );
+
+    notifyListeners();
+    _schedulePersist(pushHistory: true);
+    return true;
+  }
+
+  Future<bool> renameActiveScreen(String newName) async {
+    final screen = activeScreen;
+    final trimmed = newName.trim();
+    if (screen == null || trimmed.isEmpty) {
+      return false;
+    }
+
+    final updated = screen.copyWith(name: trimmed);
+    _replaceScreen(updated);
+    notifyListeners();
+    _schedulePersist(pushHistory: true);
+    return true;
+  }
+
+  Future<bool> moveActiveScreenLeft() async {
+    return _moveActiveScreenBy(-1);
+  }
+
+  Future<bool> moveActiveScreenRight() async {
+    return _moveActiveScreenBy(1);
+  }
+
+  Future<bool> _moveActiveScreenBy(int delta) async {
+    final project = activeProject;
+    final currentId = _activeScreenId;
+    if (project == null || currentId == null || delta == 0) {
+      return false;
+    }
+
+    final index = project.screens.indexWhere((s) => s.id == currentId);
+    if (index == -1) {
+      return false;
+    }
+
+    final targetIndex = index + delta;
+    if (targetIndex < 0 || targetIndex >= project.screens.length) {
+      return false;
+    }
+
+    final updatedScreens = [...project.screens];
+    final screen = updatedScreens.removeAt(index);
+    updatedScreens.insert(targetIndex, screen);
+
+    final updatedProject = project.copyWith(screens: updatedScreens);
+    _replaceProject(updatedProject);
+    _setEditorContext(
+      projectId: updatedProject.id,
+      screenId: currentId,
+      componentId: selectedComponentId,
+    );
+    notifyListeners();
+    _schedulePersist(pushHistory: true);
+    return true;
+  }
+
   void selectScreen(String screenId) {
     final project = activeProject;
     if (project == null) {
@@ -400,6 +495,44 @@ class ProjectProvider extends ChangeNotifier {
         )
         .toList();
     _replaceScreen(screen.copyWith(components: updatedComponents));
+    notifyListeners();
+    _schedulePersist(pushHistory: true);
+  }
+
+  Future<void> moveComponentBefore({
+    required String draggedId,
+    required String targetId,
+    bool snapToGrid = false,
+    int gridColumns = 2,
+  }) async {
+    final screen = activeScreen;
+    if (screen == null || draggedId == targetId) {
+      return;
+    }
+
+    final fromIndex = screen.components.indexWhere((c) => c.id == draggedId);
+    final toIndex = screen.components.indexWhere((c) => c.id == targetId);
+    if (fromIndex == -1 || toIndex == -1) {
+      return;
+    }
+
+    final target = screen.components[toIndex];
+    final targetRow = ((target.properties['row'] as num?) ?? -1).round();
+    final snappedRow = snapToGrid
+        ? (toIndex / (gridColumns <= 0 ? 1 : gridColumns)).floor()
+        : targetRow;
+
+    final updated = [...screen.components];
+    final dragged = updated
+        .removeAt(fromIndex)
+        .updateProperty('row', snappedRow);
+    final adjustedToIndex = fromIndex < toIndex ? toIndex - 1 : toIndex;
+    updated.insert(adjustedToIndex, dragged);
+
+    _replaceScreen(screen.copyWith(components: updated));
+    _selectedComponentIds
+      ..clear()
+      ..add(dragged.id);
     notifyListeners();
     _schedulePersist(pushHistory: true);
   }

@@ -9,6 +9,10 @@ class ScreenTabs extends StatelessWidget {
     required this.activeScreenId,
     required this.onSelect,
     required this.onAddScreen,
+    required this.onDuplicateScreen,
+    required this.onRenameScreen,
+    required this.onMoveScreenLeft,
+    required this.onMoveScreenRight,
     required this.onDeleteScreen,
   });
 
@@ -16,16 +20,21 @@ class ScreenTabs extends StatelessWidget {
   final String? activeScreenId;
   final ValueChanged<String> onSelect;
   final VoidCallback onAddScreen;
+  final VoidCallback onDuplicateScreen;
+  final VoidCallback onRenameScreen;
+  final VoidCallback onMoveScreenLeft;
+  final VoidCallback onMoveScreenRight;
   final VoidCallback onDeleteScreen;
 
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: 48,
+      height: 56,
       child: Row(
         children: [
           Expanded(
             child: ListView.separated(
+              padding: const EdgeInsets.symmetric(horizontal: 2),
               scrollDirection: Axis.horizontal,
               itemCount: screens.length,
               separatorBuilder: (_, _) => const SizedBox(width: 8),
@@ -40,20 +49,61 @@ class ScreenTabs extends StatelessWidget {
               },
             ),
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 14),
           IconButton.filledTonal(
             tooltip: 'Ajouter un écran',
             onPressed: onAddScreen,
             icon: const Icon(Icons.add_rounded),
           ),
           const SizedBox(width: 6),
-          IconButton.filledTonal(
-            tooltip: 'Supprimer écran actif',
-            onPressed: onDeleteScreen,
-            icon: const Icon(Icons.delete_outline_rounded),
+          PopupMenuButton<_ScreenTabAction>(
+            tooltip: 'Actions écran',
+            itemBuilder: (context) => const [
+              PopupMenuItem(
+                value: _ScreenTabAction.duplicate,
+                child: Text('Dupliquer écran'),
+              ),
+              PopupMenuItem(
+                value: _ScreenTabAction.rename,
+                child: Text('Renommer écran'),
+              ),
+              PopupMenuItem(
+                value: _ScreenTabAction.moveLeft,
+                child: Text('Déplacer à gauche'),
+              ),
+              PopupMenuItem(
+                value: _ScreenTabAction.moveRight,
+                child: Text('Déplacer à droite'),
+              ),
+              PopupMenuDivider(),
+              PopupMenuItem(
+                value: _ScreenTabAction.delete,
+                child: Text('Supprimer écran'),
+              ),
+            ],
+            onSelected: (action) {
+              switch (action) {
+                case _ScreenTabAction.duplicate:
+                  onDuplicateScreen();
+                case _ScreenTabAction.rename:
+                  onRenameScreen();
+                case _ScreenTabAction.moveLeft:
+                  onMoveScreenLeft();
+                case _ScreenTabAction.moveRight:
+                  onMoveScreenRight();
+                case _ScreenTabAction.delete:
+                  onDeleteScreen();
+              }
+            },
+            child: const Padding(
+              padding: EdgeInsets.all(6),
+              child: Icon(Icons.more_horiz_rounded),
+            ),
           ),
         ],
       ),
     );
   }
 }
+
+enum _ScreenTabAction { duplicate, rename, moveLeft, moveRight, delete }

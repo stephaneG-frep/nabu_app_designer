@@ -23,6 +23,9 @@ class EditorScreen extends StatefulWidget {
 class _EditorScreenState extends State<EditorScreen> {
   final ImagePicker _imagePicker = ImagePicker();
   final FlutterCodeGenerator _codeGenerator = FlutterCodeGenerator();
+  bool _gridSnapEnabled = false;
+  bool _dragModeEnabled = false;
+  static const int _gridColumns = 2;
 
   @override
   void initState() {
@@ -99,9 +102,28 @@ class _EditorScreenState extends State<EditorScreen> {
                   _importProjectJson(context);
                 case _EditorMenuAction.generateFlutterCode:
                   _showGeneratedFlutterCode(context);
+                case _EditorMenuAction.toggleGridSnap:
+                  setState(() {
+                    _gridSnapEnabled = !_gridSnapEnabled;
+                  });
+                case _EditorMenuAction.toggleDragMode:
+                  setState(() {
+                    _dragModeEnabled = !_dragModeEnabled;
+                  });
               }
             },
             itemBuilder: (context) => [
+              CheckedPopupMenuItem(
+                value: _EditorMenuAction.toggleDragMode,
+                checked: _dragModeEnabled,
+                child: const Text('Mode drag'),
+              ),
+              CheckedPopupMenuItem(
+                value: _EditorMenuAction.toggleGridSnap,
+                checked: _gridSnapEnabled,
+                child: const Text('Mode grille + snap'),
+              ),
+              const PopupMenuDivider(),
               PopupMenuItem(
                 value: _EditorMenuAction.duplicate,
                 enabled: provider.hasSelection,
@@ -179,6 +201,10 @@ class _EditorScreenState extends State<EditorScreen> {
                 activeScreenId: provider.activeScreenId,
                 onSelect: provider.selectScreen,
                 onAddScreen: provider.addScreen,
+                onDuplicateScreen: () => _duplicateCurrentScreen(context),
+                onRenameScreen: () => _renameCurrentScreen(context),
+                onMoveScreenLeft: () => _moveCurrentScreenLeft(context),
+                onMoveScreenRight: () => _moveCurrentScreenRight(context),
                 onDeleteScreen: () => _deleteCurrentScreen(context),
               ),
               const SizedBox(height: 12),
@@ -195,17 +221,35 @@ class _EditorScreenState extends State<EditorScreen> {
                     ),
                   ),
                 ),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Text(
+                    _dragModeEnabled
+                        ? 'Mode drag activé · fais glisser pour déplacer'
+                        : 'Mode drag désactivé · scroll fluide + appui long multi-sélection',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ),
+              ),
               Expanded(
                 child: isWide
                     ? _WideLayout(
                         provider: provider,
                         onPickImage: () =>
                             _pickImageForSelectedComponent(context),
+                        dragModeEnabled: _dragModeEnabled,
+                        gridSnapEnabled: _gridSnapEnabled,
+                        gridColumns: _gridColumns,
                       )
                     : _NarrowLayout(
                         provider: provider,
                         onPickImage: () =>
                             _pickImageForSelectedComponent(context),
+                        dragModeEnabled: _dragModeEnabled,
+                        gridSnapEnabled: _gridSnapEnabled,
+                        gridColumns: _gridColumns,
                       ),
               ),
             ],
@@ -244,6 +288,98 @@ class _EditorScreenState extends State<EditorScreen> {
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(const SnackBar(content: Text('Écran supprimé.')));
+  }
+
+  Future<void> _duplicateCurrentScreen(BuildContext context) async {
+    final provider = context.read<ProjectProvider>();
+    final ok = await provider.duplicateActiveScreen();
+    if (!context.mounted) {
+      return;
+    }
+    if (!ok) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Duplication impossible.')));
+      return;
+    }
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Écran dupliqué.')));
+  }
+
+  Future<void> _renameCurrentScreen(BuildContext context) async {
+    final provider = context.read<ProjectProvider>();
+    final currentName = provider.activeScreen?.name ?? '';
+    final controller = TextEditingController(text: currentName);
+
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Renommer écran'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: const InputDecoration(labelText: 'Nom de l’écran'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Annuler'),
+          ),
+          FilledButton(
+            onPressed: () async {
+              final ok = await provider.renameActiveScreen(controller.text);
+              if (dialogContext.mounted) {
+                Navigator.of(dialogContext).pop();
+              }
+              if (!context.mounted) {
+                return;
+              }
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(ok ? 'Écran renommé.' : 'Nom invalide.'),
+                ),
+              );
+            },
+            child: const Text('Renommer'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _moveCurrentScreenLeft(BuildContext context) async {
+    final provider = context.read<ProjectProvider>();
+    final ok = await provider.moveActiveScreenLeft();
+    if (!context.mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          ok
+              ? 'Écran déplacé à gauche.'
+              : 'Déplacement impossible (déjà en première position).',
+        ),
+      ),
+    );
+  }
+
+  Future<void> _moveCurrentScreenRight(BuildContext context) async {
+    final provider = context.read<ProjectProvider>();
+    final ok = await provider.moveActiveScreenRight();
+    if (!context.mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          ok
+              ? 'Écran déplacé à droite.'
+              : 'Déplacement impossible (déjà en dernière position).',
+        ),
+      ),
+    );
   }
 
   Future<void> _pickImageForSelectedComponent(BuildContext context) async {
@@ -404,6 +540,8 @@ class _EditorScreenState extends State<EditorScreen> {
 }
 
 enum _EditorMenuAction {
+  toggleDragMode,
+  toggleGridSnap,
   duplicate,
   bringFront,
   sendBack,
@@ -419,10 +557,19 @@ enum _EditorMenuAction {
 }
 
 class _WideLayout extends StatelessWidget {
-  const _WideLayout({required this.provider, required this.onPickImage});
+  const _WideLayout({
+    required this.provider,
+    required this.onPickImage,
+    required this.dragModeEnabled,
+    required this.gridSnapEnabled,
+    required this.gridColumns,
+  });
 
   final ProjectProvider provider;
   final Future<void> Function() onPickImage;
+  final bool dragModeEnabled;
+  final bool gridSnapEnabled;
+  final int gridColumns;
 
   @override
   Widget build(BuildContext context) {
@@ -437,6 +584,15 @@ class _WideLayout extends StatelessWidget {
               onSelectComponent: provider.selectComponent,
               onToggleComponentSelection: provider.toggleComponentSelection,
               onBackgroundTap: provider.clearSelectedComponent,
+              dragEnabled: dragModeEnabled,
+              showGrid: gridSnapEnabled,
+              onMoveComponentBefore: (draggedId, targetId) =>
+                  provider.moveComponentBefore(
+                    draggedId: draggedId,
+                    targetId: targetId,
+                    snapToGrid: gridSnapEnabled,
+                    gridColumns: gridColumns,
+                  ),
             ),
           ),
         ),
@@ -464,10 +620,19 @@ class _WideLayout extends StatelessWidget {
 }
 
 class _NarrowLayout extends StatelessWidget {
-  const _NarrowLayout({required this.provider, required this.onPickImage});
+  const _NarrowLayout({
+    required this.provider,
+    required this.onPickImage,
+    required this.dragModeEnabled,
+    required this.gridSnapEnabled,
+    required this.gridColumns,
+  });
 
   final ProjectProvider provider;
   final Future<void> Function() onPickImage;
+  final bool dragModeEnabled;
+  final bool gridSnapEnabled;
+  final int gridColumns;
 
   @override
   Widget build(BuildContext context) {
@@ -489,6 +654,15 @@ class _NarrowLayout extends StatelessWidget {
                   onSelectComponent: provider.selectComponent,
                   onToggleComponentSelection: provider.toggleComponentSelection,
                   onBackgroundTap: provider.clearSelectedComponent,
+                  dragEnabled: dragModeEnabled,
+                  showGrid: gridSnapEnabled,
+                  onMoveComponentBefore: (draggedId, targetId) =>
+                      provider.moveComponentBefore(
+                        draggedId: draggedId,
+                        targetId: targetId,
+                        snapToGrid: gridSnapEnabled,
+                        gridColumns: gridColumns,
+                      ),
                 ),
               ),
             ),

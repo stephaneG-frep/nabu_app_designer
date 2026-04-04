@@ -195,24 +195,63 @@ class ComponentRenderer extends StatelessWidget {
           ),
         );
       case ComponentType.button:
-        return SizedBox(
-          width: width,
-          height: height,
-          child: ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: backgroundColor,
-              elevation: elevation,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(borderRadius),
-                side: borderSide,
-              ),
-              padding: EdgeInsets.all(padding),
+        final buttonContent = ElevatedButton(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: useGradient ? Colors.transparent : backgroundColor,
+            shadowColor: useGradient ? Colors.transparent : null,
+            surfaceTintColor: Colors.transparent,
+            elevation: useGradient ? 0 : elevation,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(borderRadius),
+              side: borderSide,
             ),
-            onPressed: onAction ?? () {},
-            child: Text(text, style: commonTextStyle),
+            padding: EdgeInsets.all(padding),
           ),
+          onPressed: onAction ?? () {},
+          child: Text(text, style: commonTextStyle),
         );
+
+        if (useGradient) {
+          return SizedBox(
+            width: width,
+            height: height,
+            child: DecoratedBox(
+              decoration: _tileDecoration(
+                backgroundColor: backgroundColor,
+                gradientEndColor: gradientEndColor,
+                useGradient: true,
+                borderRadius: borderRadius,
+                border: border,
+              ),
+              child: buttonContent,
+            ),
+          );
+        }
+
+        return SizedBox(width: width, height: height, child: buttonContent);
       case ComponentType.card:
+        final cardContent = Padding(
+          padding: EdgeInsets.all(padding),
+          child: Text(text, style: commonTextStyle),
+        );
+
+        if (useGradient) {
+          return SizedBox(
+            width: width,
+            height: height,
+            child: Container(
+              decoration: _tileDecoration(
+                backgroundColor: backgroundColor,
+                gradientEndColor: gradientEndColor,
+                useGradient: true,
+                borderRadius: borderRadius,
+                border: border,
+              ),
+              child: cardContent,
+            ),
+          );
+        }
+
         return SizedBox(
           width: width,
           height: height,
@@ -223,10 +262,7 @@ class ComponentRenderer extends StatelessWidget {
               borderRadius: BorderRadius.circular(borderRadius),
               side: borderSide,
             ),
-            child: Padding(
-              padding: EdgeInsets.all(padding),
-              child: Text(text, style: commonTextStyle),
-            ),
+            child: cardContent,
           ),
         );
       case ComponentType.imagePlaceholder:

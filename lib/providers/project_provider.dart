@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import '../models/component_type.dart';
 import '../models/project_model.dart';
 import '../models/screen_model.dart';
+import '../models/screen_template_type.dart';
 import '../models/ui_component_model.dart';
 import '../services/local_storage_service.dart';
 import '../utils/id_generator.dart';
@@ -160,6 +161,26 @@ class ProjectProvider extends ChangeNotifier {
       componentId: null,
     );
 
+    notifyListeners();
+    _schedulePersist(pushHistory: true);
+  }
+
+  Future<void> addScreenFromTemplate(ScreenTemplateType template) async {
+    final project = activeProject;
+    if (project == null) {
+      return;
+    }
+
+    final screen = _buildTemplateScreen(template, project.screens.length + 1);
+    final updatedProject = project.copyWith(
+      screens: [...project.screens, screen],
+    );
+    _replaceProject(updatedProject);
+    _setEditorContext(
+      projectId: updatedProject.id,
+      screenId: screen.id,
+      componentId: null,
+    );
     notifyListeners();
     _schedulePersist(pushHistory: true);
   }
@@ -353,7 +374,7 @@ class ProjectProvider extends ChangeNotifier {
 
     for (final component in screen.components) {
       updatedComponents.add(component);
-      if (!selectedIds.contains(component.id)) {
+      if (!selectedIds.contains(component.id) || _isLocked(component)) {
         continue;
       }
       final cloned = component.copyWith(
@@ -389,7 +410,7 @@ class ProjectProvider extends ChangeNotifier {
 
     final selectedSet = _selectedComponentIds.toSet();
     final selectedComponents = screen.components
-        .where((c) => selectedSet.contains(c.id))
+        .where((c) => selectedSet.contains(c.id) && !_isLocked(c))
         .toList();
     if (selectedComponents.isEmpty) {
       return;
@@ -414,13 +435,30 @@ class ProjectProvider extends ChangeNotifier {
     }
 
     final selectedSet = _selectedComponentIds.toSet();
+    final lockedIds = screen.components
+        .where((c) => selectedSet.contains(c.id) && _isLocked(c))
+        .map((c) => c.id)
+        .toSet();
     final updatedComponents = screen.components
         .where((component) => !selectedSet.contains(component.id))
         .toList();
 
+    if (lockedIds.isNotEmpty) {
+      updatedComponents.addAll(
+        screen.components.where((c) => lockedIds.contains(c.id)),
+      );
+      updatedComponents.sort(
+        (a, b) => screen.components
+            .indexOf(a)
+            .compareTo(screen.components.indexOf(b)),
+      );
+    }
+
     final updatedScreen = screen.copyWith(components: updatedComponents);
     _replaceScreen(updatedScreen);
-    _selectedComponentIds.clear();
+    _selectedComponentIds
+      ..clear()
+      ..addAll(lockedIds);
 
     notifyListeners();
     _schedulePersist(pushHistory: true);
@@ -472,7 +510,9 @@ class ProjectProvider extends ChangeNotifier {
     final updatedComponents = screen.components
         .map(
           (component) => selectedSet.contains(component.id)
-              ? component.updateProperty('row', row)
+              ? (_isLocked(component)
+                    ? component
+                    : component.updateProperty('row', row))
               : component,
         )
         .toList();
@@ -490,7 +530,9 @@ class ProjectProvider extends ChangeNotifier {
     final updatedComponents = screen.components
         .map(
           (component) => selectedSet.contains(component.id)
-              ? component.updateProperty('alignment', alignment)
+              ? (_isLocked(component)
+                    ? component
+                    : component.updateProperty('alignment', alignment))
               : component,
         )
         .toList();
@@ -523,9 +565,11 @@ class ProjectProvider extends ChangeNotifier {
         : targetRow;
 
     final updated = [...screen.components];
-    final dragged = updated
-        .removeAt(fromIndex)
-        .updateProperty('row', snappedRow);
+    final draggedSource = updated.removeAt(fromIndex);
+    if (_isLocked(draggedSource)) {
+      return;
+    }
+    final dragged = draggedSource.updateProperty('row', snappedRow);
     final adjustedToIndex = fromIndex < toIndex ? toIndex - 1 : toIndex;
     updated.insert(adjustedToIndex, dragged);
 
@@ -555,7 +599,9 @@ class ProjectProvider extends ChangeNotifier {
     final updatedComponents = screen.components
         .map(
           (component) => selectedSet.contains(component.id)
-              ? component.updateProperty(key, value)
+              ? (_isLocked(component) && key != 'locked'
+                    ? component
+                    : component.updateProperty(key, value))
               : component,
         )
         .toList();
@@ -563,6 +609,29 @@ class ProjectProvider extends ChangeNotifier {
     final updatedScreen = screen.copyWith(components: updatedComponents);
     _replaceScreen(updatedScreen);
 
+    notifyListeners();
+    _schedulePersist(pushHistory: true);
+  }
+
+  Future<void> updateComponentPropertyById(
+    String componentId,
+    String key,
+    dynamic value,
+  ) async {
+    final screen = activeScreen;
+    if (screen == null) {
+      return;
+    }
+
+    final updatedComponents = screen.components
+        .map(
+          (component) => component.id == componentId
+              ? component.updateProperty(key, value)
+              : component,
+        )
+        .toList();
+
+    _replaceScreen(screen.copyWith(components: updatedComponents));
     notifyListeners();
     _schedulePersist(pushHistory: true);
   }
@@ -787,6 +856,202 @@ class ProjectProvider extends ChangeNotifier {
   void dispose() {
     _saveDebounce?.cancel();
     super.dispose();
+  }
+
+  Future<void> setLockedForSelected(bool locked) async {
+    await updateSelectedComponentProperty('locked', locked);
+  }
+
+  bool isComponentLocked(String componentId) {
+    final screen = activeScreen;
+    if (screen == null) {
+      return false;
+    }
+    final component = screen.components
+        .where((c) => c.id == componentId)
+        .firstOrNull;
+    if (component == null) {
+      return false;
+    }
+    return _isLocked(component);
+  }
+
+  Future<ProjectModel?> duplicateProject(String projectId) async {
+    final project = _projectById(projectId);
+    if (project == null) {
+      return null;
+    }
+
+    final clonedScreens = project.screens
+        .map(
+          (screen) => screen.copyWith(
+            id: IdGenerator.next('screen'),
+            components: screen.components
+                .map(
+                  (component) => component.copyWith(
+                    id: IdGenerator.next('component'),
+                    properties: Map<String, dynamic>.from(component.properties),
+                  ),
+                )
+                .toList(),
+          ),
+        )
+        .toList();
+
+    final clonedProject = project.copyWith(
+      id: IdGenerator.next('project'),
+      name: '${project.name} (copie)',
+      createdAt: DateTime.now(),
+      screens: clonedScreens,
+    );
+
+    _projects.insert(0, clonedProject);
+    notifyListeners();
+    await _persistNow();
+    _recordHistorySnapshot();
+    return clonedProject;
+  }
+
+  Future<bool> renameProject(String projectId, String newName) async {
+    final project = _projectById(projectId);
+    final trimmed = newName.trim();
+    if (project == null || trimmed.isEmpty) {
+      return false;
+    }
+    _replaceProject(project.copyWith(name: trimmed));
+    notifyListeners();
+    await _persistNow();
+    _recordHistorySnapshot();
+    return true;
+  }
+
+  bool _isLocked(UIComponentModel component) {
+    return (component.properties['locked'] as bool?) ?? false;
+  }
+
+  ScreenModel _buildTemplateScreen(ScreenTemplateType template, int number) {
+    final screenId = IdGenerator.next('screen');
+    final components = <UIComponentModel>[];
+
+    UIComponentModel c(ComponentType type, Map<String, dynamic> props) =>
+        UIComponentModel(id: IdGenerator.next('component'), type: type, properties: props);
+
+    Map<String, dynamic> base({
+      required String text,
+      required double width,
+      required double height,
+      int row = -1,
+    }) {
+      return {
+        'text': text,
+        'subtitle': '',
+        'color': 0xFF2A9D8F,
+        'backgroundColor': 0xFFE8F4F2,
+        'gradientEndColor': 0xFFD5E9E6,
+        'useGradient': false,
+        'fontSize': 16.0,
+        'fontWeight': 600.0,
+        'letterSpacing': 0.0,
+        'lineHeight': 1.2,
+        'padding': 12.0,
+        'borderRadius': 12.0,
+        'width': width,
+        'height': height,
+        'margin': 0.0,
+        'visible': true,
+        'opacity': 1.0,
+        'borderColor': 0xFF2A9D8F,
+        'borderWidth': 0.0,
+        'elevation': 2.0,
+        'rotation': 0.0,
+        'scale': 100.0,
+        'shadowBlur': 0.0,
+        'shadowOpacity': 0.0,
+        'shadowOffsetY': 0.0,
+        'progress': 0.6,
+        'alignment': 'center',
+        'row': row,
+        'locked': false,
+        'actionType': 'none',
+        'targetScreenId': '',
+        'imagePath': '',
+      };
+    }
+
+    switch (template) {
+      case ScreenTemplateType.login:
+        components.add(
+          c(ComponentType.appBar, base(text: 'Connexion', width: 320, height: 64)),
+        );
+        components.add(
+          c(ComponentType.text, base(text: 'Bienvenue', width: 280, height: 72)..['fontSize'] = 24.0),
+        );
+        components.add(c(ComponentType.textField, base(text: 'Email', width: 280, height: 62)));
+        components.add(
+          c(ComponentType.textField, base(text: 'Mot de passe', width: 280, height: 62)),
+        );
+        components.add(
+          c(ComponentType.button, base(text: 'Se connecter', width: 240, height: 54)),
+        );
+        break;
+      case ScreenTemplateType.dashboard:
+        components.add(
+          c(ComponentType.appBar, base(text: 'Dashboard', width: 320, height: 64)),
+        );
+        components.add(
+          c(ComponentType.statCard, base(text: '12 480', width: 160, height: 108, row: 0)..['subtitle'] = 'Utilisateurs'),
+        );
+        components.add(
+          c(ComponentType.statCard, base(text: '4 210', width: 160, height: 108, row: 0)..['subtitle'] = 'Commandes'),
+        );
+        components.add(
+          c(ComponentType.banner, base(text: 'Objectif mensuel: 82%', width: 320, height: 90)),
+        );
+        components.add(
+          c(ComponentType.progressBar, base(text: 'Progress', width: 320, height: 28)..['progress'] = 0.82),
+        );
+        break;
+      case ScreenTemplateType.profile:
+        components.add(
+          c(ComponentType.appBar, base(text: 'Mon profil', width: 320, height: 64)),
+        );
+        components.add(c(ComponentType.avatar, base(text: 'N', width: 120, height: 120)));
+        components.add(c(ComponentType.text, base(text: 'Nabu Designer', width: 280, height: 60)));
+        components.add(
+          c(ComponentType.listTile, base(text: 'Mes informations', width: 320, height: 76)..['subtitle'] = 'Email, téléphone'),
+        );
+        components.add(
+          c(ComponentType.listTile, base(text: 'Paramètres', width: 320, height: 76)..['subtitle'] = 'Préférences'),
+        );
+        components.add(
+          c(ComponentType.button, base(text: 'Se déconnecter', width: 220, height: 52)),
+        );
+        break;
+      case ScreenTemplateType.onboarding:
+        components.add(
+          c(ComponentType.imagePlaceholder, base(text: 'Illustration', width: 300, height: 220)),
+        );
+        components.add(
+          c(ComponentType.text, base(text: 'Crée des interfaces rapidement', width: 300, height: 80)..['fontSize'] = 22.0),
+        );
+        components.add(
+          c(ComponentType.text, base(text: 'Glisse, ajuste, exporte en Flutter.', width: 300, height: 70)..['fontSize'] = 14.0),
+        );
+        components.add(
+          c(ComponentType.button, base(text: 'Commencer', width: 220, height: 54)),
+        );
+        components.add(
+          c(ComponentType.button, base(text: 'Passer', width: 180, height: 48)),
+        );
+        break;
+    }
+
+    return ScreenModel(
+      id: screenId,
+      name: '${template.label} $number',
+      components: components,
+      backgroundColor: 0xFFFFFFFF,
+    );
   }
 }
 

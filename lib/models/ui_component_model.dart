@@ -281,6 +281,7 @@ class UIComponentModel {
       'progress': 0.6,
       'alignment': 'center',
       'row': -1,
+      'locked': false,
       'actionType': 'none',
       'targetScreenId': '',
       'imagePath': '',

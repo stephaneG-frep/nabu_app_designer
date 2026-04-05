@@ -4,6 +4,73 @@ import '../models/screen_model.dart';
 import '../models/ui_component_model.dart';
 
 class FlutterCodeGenerator {
+  String generateProjectBundleV2(ProjectModel project) {
+    final files = generateProjectFilesV2(project);
+    final ordered = files.entries.toList()
+      ..sort((a, b) => a.key.compareTo(b.key));
+    return ordered
+        .map((entry) => '=== ${entry.key} ===\n${entry.value}')
+        .join('\n\n');
+  }
+
+  Map<String, String> generateProjectFilesV2(ProjectModel project) {
+    if (project.screens.isEmpty) {
+      return {'lib/main.dart': _emptyProjectTemplate(project.name)};
+    }
+
+    final classByScreenId = <String, String>{};
+    final routeByScreenId = <String, String>{};
+
+    for (var i = 0; i < project.screens.length; i++) {
+      final screen = project.screens[i];
+      final className = '${_toPascalCase(screen.name)}Screen${i + 1}';
+      final route = '/${_toSnakeCase(screen.name)}_${i + 1}';
+      classByScreenId[screen.id] = className;
+      routeByScreenId[screen.id] = route;
+    }
+
+    final screenImports = <String>[];
+    final routes = <String>[];
+    final files = <String, String>{};
+
+    for (var i = 0; i < project.screens.length; i++) {
+      final screen = project.screens[i];
+      final className = classByScreenId[screen.id]!;
+      final fileName = 'lib/screens/${_toSnakeCase(screen.name)}_${i + 1}.dart';
+      screenImports.add("import 'screens/${_toSnakeCase(screen.name)}_${i + 1}.dart';");
+      routes.add("        '${routeByScreenId[screen.id]!}': (_) => const $className(),");
+      files[fileName] =
+          "import 'package:flutter/material.dart';\n\n${_generateScreenClass(screen: screen, className: className, routeByScreenId: routeByScreenId)}";
+    }
+
+    files['lib/main.dart'] = '''
+import 'package:flutter/material.dart';
+${screenImports.join('\n')}
+
+void main() {
+  runApp(const Generated${_toPascalCase(project.name)}App());
+}
+
+class Generated${_toPascalCase(project.name)}App extends StatelessWidget {
+  const Generated${_toPascalCase(project.name)}App({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      title: '${_escape(project.name)}',
+      initialRoute: '${routeByScreenId[project.screens.first.id]!}',
+      routes: {
+${routes.join('\n')}
+      },
+    );
+  }
+}
+''';
+
+    return files;
+  }
+
   String generateProjectCode(ProjectModel project) {
     if (project.screens.isEmpty) {
       return _emptyProjectTemplate(project.name);

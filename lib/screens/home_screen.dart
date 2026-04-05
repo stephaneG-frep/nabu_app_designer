@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
+import '../models/project_model.dart';
 import '../providers/project_provider.dart';
 import '../providers/theme_provider.dart';
+import 'help_screen.dart';
 import '../theme/app_theme.dart';
 import '../widgets/project_card.dart';
 import 'editor_screen.dart';
@@ -30,7 +32,8 @@ class _HomeScreenState extends State<HomeScreen> {
           return;
         }
         final now = DateTime.now();
-        final shouldExit = _lastBackPressedAt != null &&
+        final shouldExit =
+            _lastBackPressedAt != null &&
             now.difference(_lastBackPressedAt!) < const Duration(seconds: 2);
         _lastBackPressedAt = now;
 
@@ -52,6 +55,15 @@ class _HomeScreenState extends State<HomeScreen> {
           title: const Text('Nabu UI Builder'),
           centerTitle: false,
           actions: [
+            IconButton(
+              tooltip: 'Mode d’emploi',
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute<void>(builder: (_) => const HelpScreen()),
+                );
+              },
+              icon: const Icon(Icons.help_outline_rounded),
+            ),
             PopupMenuButton<AppThemeMode>(
               tooltip: 'Changer thème',
               icon: const Icon(Icons.palette_outlined),
@@ -87,7 +99,9 @@ class _HomeScreenState extends State<HomeScreen> {
             : Padding(
                 padding: const EdgeInsets.fromLTRB(16, 8, 16, 90),
                 child: provider.projects.isEmpty
-                    ? _EmptyState(onTap: () => _showCreateProjectDialog(context))
+                    ? _EmptyState(
+                        onTap: () => _showCreateProjectDialog(context),
+                      )
                     : ListView.separated(
                         itemCount: provider.projects.length,
                         separatorBuilder: (_, _) => const SizedBox(height: 10),
@@ -104,6 +118,10 @@ class _HomeScreenState extends State<HomeScreen> {
                                 ),
                               );
                             },
+                            onRename: () =>
+                                _showRenameProjectDialog(context, project.id),
+                            onDuplicate: () =>
+                                _duplicateProject(context, project.id),
                             onDelete: () =>
                                 _confirmDeleteProject(context, project.id),
                           );
@@ -189,6 +207,76 @@ class _HomeScreenState extends State<HomeScreen> {
         ],
       ),
     );
+  }
+
+  Future<void> _showRenameProjectDialog(
+    BuildContext context,
+    String projectId,
+  ) async {
+    final provider = context.read<ProjectProvider>();
+    ProjectModel? project;
+    for (final item in provider.projects) {
+      if (item.id == projectId) {
+        project = item;
+        break;
+      }
+    }
+    final controller = TextEditingController(text: project?.name ?? '');
+
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Renommer le projet'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: const InputDecoration(labelText: 'Nom du projet'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Annuler'),
+          ),
+          FilledButton(
+            onPressed: () async {
+              final ok = await provider.renameProject(
+                projectId,
+                controller.text,
+              );
+              if (dialogContext.mounted) {
+                Navigator.of(dialogContext).pop();
+              }
+              if (!context.mounted) {
+                return;
+              }
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(ok ? 'Projet renommé.' : 'Nom invalide.'),
+                ),
+              );
+            },
+            child: const Text('Renommer'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _duplicateProject(BuildContext context, String projectId) async {
+    final provider = context.read<ProjectProvider>();
+    final duplicated = await provider.duplicateProject(projectId);
+    if (!context.mounted) {
+      return;
+    }
+    if (duplicated == null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Duplication impossible.')));
+      return;
+    }
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Projet dupliqué.')));
   }
 }
 

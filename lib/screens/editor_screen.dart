@@ -2,14 +2,19 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
+import 'package:share_plus/share_plus.dart';
 
+import '../models/screen_template_type.dart';
 import '../providers/project_provider.dart';
 import '../services/flutter_code_generator.dart';
+import '../services/project_file_service.dart';
 import '../widgets/add_component_sheet.dart';
 import '../widgets/device_preview.dart';
+import '../widgets/layers_panel.dart';
 import '../widgets/property_panel.dart';
 import '../widgets/screen_tabs.dart';
 import 'full_preview_screen.dart';
+import 'help_screen.dart';
 
 class EditorScreen extends StatefulWidget {
   const EditorScreen({super.key, required this.projectId});
@@ -23,8 +28,10 @@ class EditorScreen extends StatefulWidget {
 class _EditorScreenState extends State<EditorScreen> {
   final ImagePicker _imagePicker = ImagePicker();
   final FlutterCodeGenerator _codeGenerator = FlutterCodeGenerator();
+  final ProjectFileService _projectFileService = const ProjectFileService();
   bool _gridSnapEnabled = false;
   bool _dragModeEnabled = false;
+  _PreviewSizeMode _previewSizeMode = _PreviewSizeMode.normal;
   static const int _gridColumns = 2;
 
   @override
@@ -74,42 +81,89 @@ class _EditorScreenState extends State<EditorScreen> {
             },
             icon: const Icon(Icons.fullscreen_rounded),
           ),
+          IconButton(
+            tooltip: 'Mode d’emploi',
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute<void>(builder: (_) => const HelpScreen()),
+              );
+            },
+            icon: const Icon(Icons.help_outline_rounded),
+          ),
           PopupMenuButton<_EditorMenuAction>(
             tooltip: 'Plus d’actions',
             onSelected: (action) {
               switch (action) {
                 case _EditorMenuAction.duplicate:
                   provider.duplicateSelectedComponent();
+                  break;
                 case _EditorMenuAction.bringFront:
                   provider.bringSelectedToFront();
+                  break;
                 case _EditorMenuAction.sendBack:
                   provider.sendSelectedToBack();
+                  break;
                 case _EditorMenuAction.groupSameLine:
                   provider.setSelectedComponentsRow(0);
+                  break;
                 case _EditorMenuAction.ungroupLines:
                   provider.setSelectedComponentsRow(-1);
+                  break;
                 case _EditorMenuAction.alignLeft:
                   provider.alignSelected('start');
+                  break;
                 case _EditorMenuAction.alignCenter:
                   provider.alignSelected('center');
+                  break;
                 case _EditorMenuAction.alignRight:
                   provider.alignSelected('end');
+                  break;
                 case _EditorMenuAction.deleteSelection:
                   provider.removeSelectedComponent();
+                  break;
+                case _EditorMenuAction.lockSelection:
+                  provider.setLockedForSelected(true);
+                  break;
+                case _EditorMenuAction.unlockSelection:
+                  provider.setLockedForSelected(false);
+                  break;
                 case _EditorMenuAction.exportJson:
                   _exportProjectJson(context);
+                  break;
                 case _EditorMenuAction.importJson:
                   _importProjectJson(context);
+                  break;
+                case _EditorMenuAction.exportJsonFile:
+                  _exportProjectJsonFile(context);
+                  break;
+                case _EditorMenuAction.importJsonFile:
+                  _importProjectJsonFile(context);
+                  break;
                 case _EditorMenuAction.generateFlutterCode:
                   _showGeneratedFlutterCode(context);
+                  break;
+                case _EditorMenuAction.generateFlutterCodeV2:
+                  _showGeneratedFlutterCodeV2(context);
+                  break;
+                case _EditorMenuAction.exportFlutterV2Zip:
+                  _exportFlutterV2Zip(context);
+                  break;
+                case _EditorMenuAction.exportFlutterV2Email:
+                  _exportFlutterV2Email(context);
+                  break;
+                case _EditorMenuAction.addTemplateScreen:
+                  _showTemplatePicker(context);
+                  break;
                 case _EditorMenuAction.toggleGridSnap:
                   setState(() {
                     _gridSnapEnabled = !_gridSnapEnabled;
                   });
+                  break;
                 case _EditorMenuAction.toggleDragMode:
                   setState(() {
                     _dragModeEnabled = !_dragModeEnabled;
                   });
+                  break;
               }
             },
             itemBuilder: (context) => [
@@ -169,6 +223,21 @@ class _EditorScreenState extends State<EditorScreen> {
                 enabled: provider.hasSelection,
                 child: const Text('Supprimer sélection'),
               ),
+              PopupMenuItem(
+                value: _EditorMenuAction.lockSelection,
+                enabled: provider.hasSelection,
+                child: const Text('Verrouiller sélection'),
+              ),
+              PopupMenuItem(
+                value: _EditorMenuAction.unlockSelection,
+                enabled: provider.hasSelection,
+                child: const Text('Déverrouiller sélection'),
+              ),
+              const PopupMenuDivider(),
+              const PopupMenuItem(
+                value: _EditorMenuAction.addTemplateScreen,
+                child: Text('Ajouter écran template'),
+              ),
               const PopupMenuDivider(),
               const PopupMenuItem(
                 value: _EditorMenuAction.exportJson,
@@ -179,8 +248,28 @@ class _EditorScreenState extends State<EditorScreen> {
                 child: Text('Importer JSON'),
               ),
               const PopupMenuItem(
+                value: _EditorMenuAction.exportJsonFile,
+                child: Text('Exporter JSON fichier'),
+              ),
+              const PopupMenuItem(
+                value: _EditorMenuAction.importJsonFile,
+                child: Text('Importer JSON fichier'),
+              ),
+              const PopupMenuItem(
                 value: _EditorMenuAction.generateFlutterCode,
                 child: Text('Générer code Flutter'),
+              ),
+              const PopupMenuItem(
+                value: _EditorMenuAction.generateFlutterCodeV2,
+                child: Text('Générer Flutter V2'),
+              ),
+              const PopupMenuItem(
+                value: _EditorMenuAction.exportFlutterV2Zip,
+                child: Text('Exporter Flutter V2 (.zip)'),
+              ),
+              const PopupMenuItem(
+                value: _EditorMenuAction.exportFlutterV2Email,
+                child: Text('Exporter par mail'),
               ),
             ],
           ),
@@ -233,12 +322,104 @@ class _EditorScreenState extends State<EditorScreen> {
                   ),
                 ),
               ),
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final compact = constraints.maxWidth < 560;
+
+                  if (compact) {
+                    return Row(
+                      children: [
+                        Text(
+                          'Taille preview',
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: DropdownButtonFormField<_PreviewSizeMode>(
+                            isExpanded: true,
+                            initialValue: _previewSizeMode,
+                            decoration: const InputDecoration(
+                              isDense: true,
+                              border: OutlineInputBorder(),
+                              contentPadding: EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 10,
+                              ),
+                            ),
+                            items: const [
+                              DropdownMenuItem(
+                                value: _PreviewSizeMode.reduced,
+                                child: Text('Réduit'),
+                              ),
+                              DropdownMenuItem(
+                                value: _PreviewSizeMode.normal,
+                                child: Text('Normal'),
+                              ),
+                              DropdownMenuItem(
+                                value: _PreviewSizeMode.expanded,
+                                child: Text('Agrandir'),
+                              ),
+                            ],
+                            onChanged: (value) {
+                              if (value == null) {
+                                return;
+                              }
+                              setState(() {
+                                _previewSizeMode = value;
+                              });
+                            },
+                          ),
+                        ),
+                      ],
+                    );
+                  }
+
+                  return Row(
+                    children: [
+                      Text(
+                        'Taille preview',
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: SegmentedButton<_PreviewSizeMode>(
+                            segments: const [
+                              ButtonSegment<_PreviewSizeMode>(
+                                value: _PreviewSizeMode.reduced,
+                                label: Text('Réduit'),
+                              ),
+                              ButtonSegment<_PreviewSizeMode>(
+                                value: _PreviewSizeMode.normal,
+                                label: Text('Normal'),
+                              ),
+                              ButtonSegment<_PreviewSizeMode>(
+                                value: _PreviewSizeMode.expanded,
+                                label: Text('Agrandir'),
+                              ),
+                            ],
+                            selected: {_previewSizeMode},
+                            onSelectionChanged: (selection) {
+                              setState(() {
+                                _previewSizeMode = selection.first;
+                              });
+                            },
+                          ),
+                        ),
+                      ),
+                    ],
+                  );
+                },
+              ),
+              const SizedBox(height: 8),
               Expanded(
                 child: isWide
                     ? _WideLayout(
                         provider: provider,
                         onPickImage: () =>
                             _pickImageForSelectedComponent(context),
+                        previewSizeMode: _previewSizeMode,
                         dragModeEnabled: _dragModeEnabled,
                         gridSnapEnabled: _gridSnapEnabled,
                         gridColumns: _gridColumns,
@@ -247,6 +428,7 @@ class _EditorScreenState extends State<EditorScreen> {
                         provider: provider,
                         onPickImage: () =>
                             _pickImageForSelectedComponent(context),
+                        previewSizeMode: _previewSizeMode,
                         dragModeEnabled: _dragModeEnabled,
                         gridSnapEnabled: _gridSnapEnabled,
                         gridColumns: _gridColumns,
@@ -537,6 +719,209 @@ class _EditorScreenState extends State<EditorScreen> {
       ),
     );
   }
+
+  Future<void> _showGeneratedFlutterCodeV2(BuildContext context) async {
+    final project = context.read<ProjectProvider>().activeProject;
+    if (project == null) {
+      return;
+    }
+    final bundle = _codeGenerator.generateProjectBundleV2(project);
+    if (!context.mounted) {
+      return;
+    }
+    await _showCodeDialog(
+      context: context,
+      title: 'Code Flutter V2',
+      description: 'Bundle multi-fichiers (main + screens).',
+      code: bundle,
+    );
+  }
+
+  Future<void> _exportFlutterV2Zip(BuildContext context) async {
+    final project = context.read<ProjectProvider>().activeProject;
+    if (project == null) {
+      return;
+    }
+
+    final files = _codeGenerator.generateProjectFilesV2(project);
+    final path = await _projectFileService.exportFlutterV2Zip(
+      project: project,
+      generatedFiles: files,
+    );
+    if (!context.mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('ZIP Flutter exporté: $path')));
+  }
+
+  Future<void> _exportFlutterV2Email(BuildContext context) async {
+    final project = context.read<ProjectProvider>().activeProject;
+    if (project == null) {
+      return;
+    }
+
+    final files = _codeGenerator.generateProjectFilesV2(project);
+    final path = await _projectFileService.exportFlutterV2Zip(
+      project: project,
+      generatedFiles: files,
+    );
+
+    try {
+      await Share.shareXFiles(
+        [XFile(path)],
+        subject: 'Export Flutter V2 - ${project.name}',
+        text:
+            'Bonjour,\n\nVoici l’export Flutter V2 du projet "${project.name}".\n\nGénéré avec Nabu App Designer.',
+      );
+    } catch (_) {
+      if (!context.mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Impossible d’ouvrir le partage e-mail.')),
+      );
+      return;
+    }
+
+    if (!context.mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Choisis ton app e-mail pour envoyer le ZIP.'),
+      ),
+    );
+  }
+
+  Future<void> _showCodeDialog({
+    required BuildContext context,
+    required String title,
+    required String description,
+    required String code,
+  }) async {
+    await showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(title),
+        content: SizedBox(
+          width: 720,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(description),
+              const SizedBox(height: 12),
+              Container(
+                constraints: const BoxConstraints(maxHeight: 420),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF0F172A),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: SingleChildScrollView(
+                  child: SelectableText(
+                    code,
+                    style: const TextStyle(
+                      fontFamily: 'monospace',
+                      color: Color(0xFFE2E8F0),
+                      fontSize: 12,
+                      height: 1.35,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Fermer'),
+          ),
+          FilledButton.icon(
+            onPressed: () async {
+              await Clipboard.setData(ClipboardData(text: code));
+              if (!context.mounted) {
+                return;
+              }
+              ScaffoldMessenger.of(
+                context,
+              ).showSnackBar(const SnackBar(content: Text('Code copié.')));
+            },
+            icon: const Icon(Icons.copy_rounded),
+            label: const Text('Copier'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _exportProjectJsonFile(BuildContext context) async {
+    final project = context.read<ProjectProvider>().activeProject;
+    if (project == null) {
+      return;
+    }
+    final path = await _projectFileService.exportProjectToFile(project);
+    if (!context.mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('Exporté: $path')));
+  }
+
+  Future<void> _importProjectJsonFile(BuildContext context) async {
+    final provider = context.read<ProjectProvider>();
+    final content = await _projectFileService.pickJsonFileContent();
+    if (content == null) {
+      return;
+    }
+    try {
+      await provider.importProjectFromJson(content);
+      if (!context.mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Projet importé depuis fichier.')),
+      );
+    } catch (_) {
+      if (!context.mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Fichier JSON invalide.')));
+    }
+  }
+
+  Future<void> _showTemplatePicker(BuildContext context) async {
+    final provider = context.read<ProjectProvider>();
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) => SafeArea(
+        child: ListView(
+          shrinkWrap: true,
+          children: ScreenTemplateType.values
+              .map(
+                (template) => ListTile(
+                  title: Text(template.label),
+                  trailing: const Icon(Icons.add_rounded),
+                  onTap: () async {
+                    await provider.addScreenFromTemplate(template);
+                    if (context.mounted) {
+                      Navigator.of(context).pop();
+                    }
+                  },
+                ),
+              )
+              .toList(),
+        ),
+      ),
+    );
+  }
 }
 
 enum _EditorMenuAction {
@@ -551,15 +936,26 @@ enum _EditorMenuAction {
   alignCenter,
   alignRight,
   deleteSelection,
+  lockSelection,
+  unlockSelection,
+  addTemplateScreen,
   exportJson,
   importJson,
+  exportJsonFile,
+  importJsonFile,
   generateFlutterCode,
+  generateFlutterCodeV2,
+  exportFlutterV2Zip,
+  exportFlutterV2Email,
 }
+
+enum _PreviewSizeMode { reduced, normal, expanded }
 
 class _WideLayout extends StatelessWidget {
   const _WideLayout({
     required this.provider,
     required this.onPickImage,
+    required this.previewSizeMode,
     required this.dragModeEnabled,
     required this.gridSnapEnabled,
     required this.gridColumns,
@@ -567,16 +963,33 @@ class _WideLayout extends StatelessWidget {
 
   final ProjectProvider provider;
   final Future<void> Function() onPickImage;
+  final _PreviewSizeMode previewSizeMode;
   final bool dragModeEnabled;
   final bool gridSnapEnabled;
   final int gridColumns;
 
   @override
   Widget build(BuildContext context) {
+    final previewFlex = switch (previewSizeMode) {
+      _PreviewSizeMode.reduced => 2,
+      _PreviewSizeMode.normal => 3,
+      _PreviewSizeMode.expanded => 5,
+    };
+    final panelFlex = switch (previewSizeMode) {
+      _PreviewSizeMode.reduced => 3,
+      _PreviewSizeMode.normal => 2,
+      _PreviewSizeMode.expanded => 1,
+    };
+    final frameMaxWidth = switch (previewSizeMode) {
+      _PreviewSizeMode.reduced => 340.0,
+      _PreviewSizeMode.normal => 390.0,
+      _PreviewSizeMode.expanded => 500.0,
+    };
+
     return Row(
       children: [
         Expanded(
-          flex: 3,
+          flex: previewFlex,
           child: Center(
             child: DevicePreview(
               screen: provider.activeScreen,
@@ -584,6 +997,7 @@ class _WideLayout extends StatelessWidget {
               onSelectComponent: provider.selectComponent,
               onToggleComponentSelection: provider.toggleComponentSelection,
               onBackgroundTap: provider.clearSelectedComponent,
+              frameMaxWidth: frameMaxWidth,
               dragEnabled: dragModeEnabled,
               showGrid: gridSnapEnabled,
               onMoveComponentBefore: (draggedId, targetId) =>
@@ -598,20 +1012,42 @@ class _WideLayout extends StatelessWidget {
         ),
         const SizedBox(width: 16),
         Expanded(
-          flex: 2,
-          child: PropertyPanel(
-            component: provider.selectedComponent,
-            onUpdateProperty: provider.updateSelectedComponentProperty,
-            onDelete: provider.removeSelectedComponent,
-            onBackToScreenSettings: provider.clearSelectedComponent,
-            screens: provider.activeProject?.screens ?? const [],
-            activeScreenId: provider.activeScreenId,
-            onPickImage: onPickImage,
-            selectedCount: provider.selectedComponentIds.length,
-            screenBackgroundColor:
-                provider.activeScreen?.backgroundColor ?? 0xFFFFFFFF,
-            onUpdateScreenBackgroundColor:
-                provider.updateActiveScreenBackgroundColor,
+          flex: panelFlex,
+          child: Column(
+            children: [
+              LayersPanel(
+                components: provider.activeScreen?.components ?? const [],
+                selectedIds: provider.selectedComponentIds,
+                onSelect: provider.selectComponent,
+                onToggleSelect: provider.toggleComponentSelection,
+                isLocked: provider.isComponentLocked,
+                onToggleLock: (componentId, locked) => provider
+                    .updateComponentPropertyById(componentId, 'locked', locked),
+                onToggleVisible: (componentId, visible) =>
+                    provider.updateComponentPropertyById(
+                      componentId,
+                      'visible',
+                      visible,
+                    ),
+              ),
+              const SizedBox(height: 12),
+              Expanded(
+                child: PropertyPanel(
+                  component: provider.selectedComponent,
+                  onUpdateProperty: provider.updateSelectedComponentProperty,
+                  onDelete: provider.removeSelectedComponent,
+                  onBackToScreenSettings: provider.clearSelectedComponent,
+                  screens: provider.activeProject?.screens ?? const [],
+                  activeScreenId: provider.activeScreenId,
+                  onPickImage: onPickImage,
+                  selectedCount: provider.selectedComponentIds.length,
+                  screenBackgroundColor:
+                      provider.activeScreen?.backgroundColor ?? 0xFFFFFFFF,
+                  onUpdateScreenBackgroundColor:
+                      provider.updateActiveScreenBackgroundColor,
+                ),
+              ),
+            ],
           ),
         ),
       ],
@@ -623,6 +1059,7 @@ class _NarrowLayout extends StatelessWidget {
   const _NarrowLayout({
     required this.provider,
     required this.onPickImage,
+    required this.previewSizeMode,
     required this.dragModeEnabled,
     required this.gridSnapEnabled,
     required this.gridColumns,
@@ -630,6 +1067,7 @@ class _NarrowLayout extends StatelessWidget {
 
   final ProjectProvider provider;
   final Future<void> Function() onPickImage;
+  final _PreviewSizeMode previewSizeMode;
   final bool dragModeEnabled;
   final bool gridSnapEnabled;
   final int gridColumns;
@@ -638,10 +1076,20 @@ class _NarrowLayout extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final previewHeight = (constraints.maxHeight * 0.50).clamp(
+        final ratio = switch (previewSizeMode) {
+          _PreviewSizeMode.reduced => 0.45,
+          _PreviewSizeMode.normal => 0.62,
+          _PreviewSizeMode.expanded => 0.78,
+        };
+        final previewHeight = (constraints.maxHeight * ratio).clamp(
           220.0,
-          420.0,
+          760.0,
         );
+        final frameMaxWidth = switch (previewSizeMode) {
+          _PreviewSizeMode.reduced => 320.0,
+          _PreviewSizeMode.normal => 390.0,
+          _PreviewSizeMode.expanded => 500.0,
+        };
 
         return ListView(
           children: [
@@ -654,6 +1102,7 @@ class _NarrowLayout extends StatelessWidget {
                   onSelectComponent: provider.selectComponent,
                   onToggleComponentSelection: provider.toggleComponentSelection,
                   onBackgroundTap: provider.clearSelectedComponent,
+                  frameMaxWidth: frameMaxWidth,
                   dragEnabled: dragModeEnabled,
                   showGrid: gridSnapEnabled,
                   onMoveComponentBefore: (draggedId, targetId) =>
@@ -665,6 +1114,18 @@ class _NarrowLayout extends StatelessWidget {
                       ),
                 ),
               ),
+            ),
+            const SizedBox(height: 12),
+            LayersPanel(
+              components: provider.activeScreen?.components ?? const [],
+              selectedIds: provider.selectedComponentIds,
+              onSelect: provider.selectComponent,
+              onToggleSelect: provider.toggleComponentSelection,
+              isLocked: provider.isComponentLocked,
+              onToggleLock: (componentId, locked) => provider
+                  .updateComponentPropertyById(componentId, 'locked', locked),
+              onToggleVisible: (componentId, visible) => provider
+                  .updateComponentPropertyById(componentId, 'visible', visible),
             ),
             const SizedBox(height: 12),
             PropertyPanel(

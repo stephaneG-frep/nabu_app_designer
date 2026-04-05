@@ -17,6 +17,7 @@ class DevicePreview extends StatelessWidget {
     this.interactiveMode = false,
     this.showGrid = false,
     this.dragEnabled = true,
+    this.frameMaxWidth = 390,
     this.onNavigateToScreen,
     this.onMoveComponentBefore,
   });
@@ -31,6 +32,7 @@ class DevicePreview extends StatelessWidget {
   final bool interactiveMode;
   final bool showGrid;
   final bool dragEnabled;
+  final double frameMaxWidth;
   final ValueChanged<String>? onNavigateToScreen;
   final Future<void> Function(String draggedId, String targetId)?
   onMoveComponentBefore;
@@ -49,7 +51,7 @@ class DevicePreview extends StatelessWidget {
     }
 
     return Container(
-      constraints: const BoxConstraints(maxWidth: 390),
+      constraints: BoxConstraints(maxWidth: frameMaxWidth),
       decoration: BoxDecoration(
         color: const Color(0xFF0F172A),
         borderRadius: BorderRadius.circular(36),

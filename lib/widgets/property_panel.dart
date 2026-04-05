@@ -82,6 +82,7 @@ class PropertyPanel extends StatelessWidget {
     final radius = ((props['borderRadius'] as num?) ?? 12).toDouble();
     final row = ((props['row'] as num?) ?? -1).toInt();
     final visible = (props['visible'] as bool?) ?? true;
+    final locked = (props['locked'] as bool?) ?? false;
     final borderColor = (props['borderColor'] as int?) ?? colorValue;
     final borderWidth = ((props['borderWidth'] as num?) ?? 0).toDouble();
     final elevation = ((props['elevation'] as num?) ?? 2).toDouble();
@@ -148,6 +149,11 @@ class PropertyPanel extends StatelessWidget {
               label: 'Visible',
               value: visible,
               onChanged: (value) => onUpdateProperty('visible', value),
+            ),
+            _BooleanField(
+              label: 'Verrouillé',
+              value: locked,
+              onChanged: (value) => onUpdateProperty('locked', value),
             ),
             const SizedBox(height: 8),
             _SliderField(

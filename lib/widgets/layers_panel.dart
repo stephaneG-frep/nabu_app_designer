@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../models/ui_component_model.dart';
 
-class LayersPanel extends StatelessWidget {
+class LayersPanel extends StatefulWidget {
   const LayersPanel({
     super.key,
     required this.components,
@@ -23,7 +23,58 @@ class LayersPanel extends StatelessWidget {
   final bool Function(String componentId) isLocked;
 
   @override
+  State<LayersPanel> createState() => _LayersPanelState();
+}
+
+class _LayersPanelState extends State<LayersPanel> {
+  final TextEditingController _searchController = TextEditingController();
+  String _query = '';
+  bool _onlyVisible = false;
+  bool _onlyLocked = false;
+  bool _onlySelected = false;
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final filtered = widget.components.where((component) {
+      final label = ((component.properties['text'] as String?) ?? '')
+          .trim()
+          .toLowerCase();
+      final type = component.type.name.toLowerCase();
+      final visible = (component.properties['visible'] as bool?) ?? true;
+      final locked = widget.isLocked(component.id);
+      final selected = widget.selectedIds.contains(component.id);
+
+      final q = _query.trim().toLowerCase();
+      final matchesQuery = q.isEmpty || label.contains(q) || type.contains(q);
+
+      if (!matchesQuery) {
+        return false;
+      }
+      if (_onlyVisible && !visible) {
+        return false;
+      }
+      if (_onlyLocked && !locked) {
+        return false;
+      }
+      if (_onlySelected && !selected) {
+        return false;
+      }
+      return true;
+    }).toList();
+
+    final reversedFiltered = filtered.reversed.toList();
+    final hasActiveFilter =
+        _query.trim().isNotEmpty ||
+        _onlyVisible ||
+        _onlyLocked ||
+        _onlySelected;
+
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(12),
@@ -31,35 +82,96 @@ class LayersPanel extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Calques (${components.length})',
+              'Calques (${filtered.length}/${widget.components.length})',
               style: Theme.of(
                 context,
               ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 10),
-            if (components.isEmpty)
+            TextField(
+              controller: _searchController,
+              onChanged: (value) => setState(() => _query = value),
+              decoration: InputDecoration(
+                isDense: true,
+                hintText: 'Rechercher un calque...',
+                prefixIcon: const Icon(Icons.search_rounded, size: 18),
+                suffixIcon: _query.trim().isEmpty
+                    ? null
+                    : IconButton(
+                        tooltip: 'Effacer',
+                        onPressed: () {
+                          _searchController.clear();
+                          setState(() => _query = '');
+                        },
+                        icon: const Icon(Icons.clear_rounded, size: 18),
+                      ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                FilterChip(
+                  label: const Text('Visibles'),
+                  selected: _onlyVisible,
+                  onSelected: (v) => setState(() => _onlyVisible = v),
+                ),
+                FilterChip(
+                  label: const Text('Verrouillés'),
+                  selected: _onlyLocked,
+                  onSelected: (v) => setState(() => _onlyLocked = v),
+                ),
+                FilterChip(
+                  label: const Text('Sélection'),
+                  selected: _onlySelected,
+                  onSelected: (v) => setState(() => _onlySelected = v),
+                ),
+                if (hasActiveFilter)
+                  TextButton.icon(
+                    onPressed: () {
+                      _searchController.clear();
+                      setState(() {
+                        _query = '';
+                        _onlyVisible = false;
+                        _onlyLocked = false;
+                        _onlySelected = false;
+                      });
+                    },
+                    icon: const Icon(Icons.filter_alt_off_rounded, size: 16),
+                    label: const Text('Réinitialiser'),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            if (widget.components.isEmpty)
               Text(
                 'Aucun composant',
                 style: Theme.of(context).textTheme.bodySmall,
               )
+            else if (filtered.isEmpty)
+              Text(
+                'Aucun résultat avec ces filtres.',
+                style: Theme.of(context).textTheme.bodySmall,
+              )
             else
               SizedBox(
-                height: 170,
+                height: 210,
                 child: ListView.separated(
-                  itemCount: components.length,
+                  itemCount: reversedFiltered.length,
                   separatorBuilder: (_, _) => const SizedBox(height: 4),
                   itemBuilder: (context, index) {
-                    final component = components[components.length - 1 - index];
-                    final selected = selectedIds.contains(component.id);
-                    final locked = isLocked(component.id);
+                    final component = reversedFiltered[index];
+                    final selected = widget.selectedIds.contains(component.id);
+                    final locked = widget.isLocked(component.id);
                     final visible =
                         (component.properties['visible'] as bool?) ?? true;
                     final label =
                         (component.properties['text'] as String?)?.trim() ?? '';
                     return InkWell(
                       borderRadius: BorderRadius.circular(10),
-                      onTap: () => onSelect(component.id),
-                      onLongPress: () => onToggleSelect(component.id),
+                      onTap: () => widget.onSelect(component.id),
+                      onLongPress: () => widget.onToggleSelect(component.id),
                       child: Container(
                         padding: const EdgeInsets.symmetric(
                           horizontal: 8,
@@ -88,8 +200,10 @@ class LayersPanel extends StatelessWidget {
                             IconButton(
                               visualDensity: VisualDensity.compact,
                               tooltip: visible ? 'Masquer' : 'Afficher',
-                              onPressed: () =>
-                                  onToggleVisible(component.id, !visible),
+                              onPressed: () => widget.onToggleVisible(
+                                component.id,
+                                !visible,
+                              ),
                               icon: Icon(
                                 visible
                                     ? Icons.visibility_rounded
@@ -101,7 +215,7 @@ class LayersPanel extends StatelessWidget {
                               visualDensity: VisualDensity.compact,
                               tooltip: locked ? 'Déverrouiller' : 'Verrouiller',
                               onPressed: () =>
-                                  onToggleLock(component.id, !locked),
+                                  widget.onToggleLock(component.id, !locked),
                               icon: Icon(
                                 locked
                                     ? Icons.lock_rounded

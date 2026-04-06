@@ -46,6 +46,8 @@ Dans la barre des écrans :
 - Appui long (mode drag OFF) : ajouter/retirer de la sélection multiple
 - Panneau `Calques` :
 - voit l'ordre des composants
+- recherche par texte/type
+- filtres rapides (visibles, verrouillés, sélection)
 - sélection rapide
 - bouton oeil : afficher/masquer
 - bouton cadenas : verrouiller/déverrouiller
@@ -103,7 +105,19 @@ Dans `Plus d’actions` :
 - affiche la grille
 - en drag, les composants se calent sur la grille (snap)
 
-## 11. Actions de masse (menu Plus d’actions)
+## 11. Autosave intelligent et timeline
+
+- L’app sauvegarde automatiquement après tes modifications (autosave).
+- Une ligne d’état indique :
+- sauvegarde en cours
+- modifications non sauvegardées
+- heure de dernière sauvegarde
+- bouton `Sauver` : force une sauvegarde immédiate.
+- icône `Timeline` (en haut) :
+- affiche l’historique visuel des changements
+- permet de restaurer un état précédent en un tap
+
+## 12. Actions de masse (menu Plus d’actions)
 
 Sur la sélection courante :
 
@@ -114,25 +128,30 @@ Sur la sélection courante :
 - supprimer sélection
 - verrouiller / déverrouiller sélection
 
-## 12. Import / Export / Génération Flutter
+## 13. Import / Export / Génération Flutter
 
 Dans `Plus d’actions` :
 
 - `Exporter JSON` : copie le projet en JSON
+- `Exporter JSON par mail` : génère un fichier JSON puis ouvre le partage Android (Gmail/mail)
 - `Importer JSON` : colle un JSON de projet
+- `Exporter JSON fichier` : sauvegarde un fichier `.json` local
+- `Importer JSON fichier` : charge un `.json` local
 - `Générer code Flutter` : génère du code Flutter (copiable)
+- `Générer Flutter V2` : bundle multi-fichiers (main + screens)
+- `Exporter Flutter V2 (.zip)` : crée un zip prêt à récupérer
+- `Exporter par mail` : crée le zip Flutter et ouvre le partage Android (Gmail/mail)
 
-## 13. Conseils pratiques
+## 14. Conseils pratiques
 
 - Pour éditer vite : utilise le panneau calques + multi-sélection.
 - Pour éviter les erreurs : verrouille les éléments finalisés.
 - Pour réorganiser proprement : active `Mode drag`, puis `Mode grille + snap`.
 - Pour présenter : utilise `Plein écran`.
 
-## 14. Dépannage rapide
+## 15. Dépannage rapide
 
 - Si le scroll est difficile : désactive `Mode drag`.
 - Si un composant ne bouge pas : vérifie qu'il n'est pas verrouillé.
 - Si un bouton n'agit pas : vérifie `Action au tap` + `Écran cible`.
 - Si le téléphone n'est pas détecté : reconnecte USB + `flutter devices`.
-

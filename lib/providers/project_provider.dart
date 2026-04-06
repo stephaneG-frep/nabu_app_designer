@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 
 import '../models/component_type.dart';
+import '../models/history_timeline_entry.dart';
 import '../models/project_model.dart';
 import '../models/screen_model.dart';
 import '../models/screen_template_type.dart';
@@ -24,8 +25,14 @@ class ProjectProvider extends ChangeNotifier {
   final List<String> _selectedComponentIds = <String>[];
 
   Timer? _saveDebounce;
+  bool _isSaving = false;
+  bool _hasPendingSave = false;
+  bool _saveQueued = false;
+  String? _lastSaveError;
+  DateTime? _lastSavedAt;
+  String _pendingHistoryLabel = 'Modification';
 
-  final List<String> _history = <String>[];
+  final List<_HistoryEntry> _history = <_HistoryEntry>[];
   int _historyIndex = -1;
   bool _isRestoringHistory = false;
 
@@ -42,6 +49,40 @@ class ProjectProvider extends ChangeNotifier {
 
   bool get canUndo => _historyIndex > 0;
   bool get canRedo => _historyIndex >= 0 && _historyIndex < _history.length - 1;
+  bool get isSaving => _isSaving;
+  bool get hasPendingSave => _hasPendingSave;
+  String? get lastSaveError => _lastSaveError;
+  DateTime? get lastSavedAt => _lastSavedAt;
+
+  String get saveStatusLabel {
+    if (_lastSaveError != null) {
+      return 'Erreur de sauvegarde';
+    }
+    if (_isSaving) {
+      return 'Sauvegarde en cours...';
+    }
+    if (_hasPendingSave) {
+      return 'Modifications non sauvegardées';
+    }
+    if (_lastSavedAt != null) {
+      return 'Sauvegardé à ${_formatTime(_lastSavedAt!)}';
+    }
+    return 'Prêt';
+  }
+
+  List<HistoryTimelineEntry> get historyTimeline {
+    return List<HistoryTimelineEntry>.unmodifiable(
+      List<HistoryTimelineEntry>.generate(_history.length, (index) {
+        final entry = _history[index];
+        return HistoryTimelineEntry(
+          index: index,
+          label: entry.label,
+          createdAt: entry.createdAt,
+          isCurrent: index == _historyIndex,
+        );
+      }),
+    );
+  }
 
   ProjectModel? get activeProject => _projectById(_activeProjectId);
 
@@ -102,7 +143,7 @@ class ProjectProvider extends ChangeNotifier {
     );
     notifyListeners();
     await _persistNow();
-    _recordHistorySnapshot();
+    _recordHistorySnapshot(label: 'Création projet');
     return project;
   }
 
@@ -115,7 +156,7 @@ class ProjectProvider extends ChangeNotifier {
 
     notifyListeners();
     await _persistNow();
-    _recordHistorySnapshot();
+    _recordHistorySnapshot(label: 'Suppression projet');
   }
 
   void openProject(String projectId) {
@@ -162,7 +203,7 @@ class ProjectProvider extends ChangeNotifier {
     );
 
     notifyListeners();
-    _schedulePersist(pushHistory: true);
+    _schedulePersist(pushHistory: true, historyLabel: 'Ajout écran');
   }
 
   Future<void> addScreenFromTemplate(ScreenTemplateType template) async {
@@ -182,7 +223,7 @@ class ProjectProvider extends ChangeNotifier {
       componentId: null,
     );
     notifyListeners();
-    _schedulePersist(pushHistory: true);
+    _schedulePersist(pushHistory: true, historyLabel: 'Ajout écran template');
   }
 
   Future<bool> deleteActiveScreen() async {
@@ -211,7 +252,7 @@ class ProjectProvider extends ChangeNotifier {
     );
 
     notifyListeners();
-    _schedulePersist(pushHistory: true);
+    _schedulePersist(pushHistory: true, historyLabel: 'Suppression écran');
     return true;
   }
 
@@ -251,7 +292,7 @@ class ProjectProvider extends ChangeNotifier {
     );
 
     notifyListeners();
-    _schedulePersist(pushHistory: true);
+    _schedulePersist(pushHistory: true, historyLabel: 'Duplication écran');
     return true;
   }
 
@@ -265,7 +306,7 @@ class ProjectProvider extends ChangeNotifier {
     final updated = screen.copyWith(name: trimmed);
     _replaceScreen(updated);
     notifyListeners();
-    _schedulePersist(pushHistory: true);
+    _schedulePersist(pushHistory: true, historyLabel: 'Renommage écran');
     return true;
   }
 
@@ -306,7 +347,7 @@ class ProjectProvider extends ChangeNotifier {
       componentId: selectedComponentId,
     );
     notifyListeners();
-    _schedulePersist(pushHistory: true);
+    _schedulePersist(pushHistory: true, historyLabel: 'Déplacement écran');
     return true;
   }
 
@@ -359,7 +400,7 @@ class ProjectProvider extends ChangeNotifier {
       ..add(component.id);
 
     notifyListeners();
-    _schedulePersist(pushHistory: true);
+    _schedulePersist(pushHistory: true, historyLabel: 'Ajout composant');
   }
 
   Future<void> duplicateSelectedComponent() async {
@@ -391,7 +432,7 @@ class ProjectProvider extends ChangeNotifier {
       ..clear()
       ..addAll(duplicatedIds);
     notifyListeners();
-    _schedulePersist(pushHistory: true);
+    _schedulePersist(pushHistory: true, historyLabel: 'Duplication composant');
   }
 
   Future<void> bringSelectedToFront() async {
@@ -425,7 +466,10 @@ class ProjectProvider extends ChangeNotifier {
 
     _replaceScreen(screen.copyWith(components: updated));
     notifyListeners();
-    _schedulePersist(pushHistory: true);
+    _schedulePersist(
+      pushHistory: true,
+      historyLabel: front ? 'Premier plan' : 'Arrière-plan',
+    );
   }
 
   Future<void> removeSelectedComponent() async {
@@ -461,7 +505,7 @@ class ProjectProvider extends ChangeNotifier {
       ..addAll(lockedIds);
 
     notifyListeners();
-    _schedulePersist(pushHistory: true);
+    _schedulePersist(pushHistory: true, historyLabel: 'Suppression composant');
   }
 
   void selectComponent(String componentId) {
@@ -518,7 +562,7 @@ class ProjectProvider extends ChangeNotifier {
         .toList();
     _replaceScreen(screen.copyWith(components: updatedComponents));
     notifyListeners();
-    _schedulePersist(pushHistory: true);
+    _schedulePersist(pushHistory: true, historyLabel: 'Changement de ligne');
   }
 
   Future<void> alignSelected(String alignment) async {
@@ -538,7 +582,7 @@ class ProjectProvider extends ChangeNotifier {
         .toList();
     _replaceScreen(screen.copyWith(components: updatedComponents));
     notifyListeners();
-    _schedulePersist(pushHistory: true);
+    _schedulePersist(pushHistory: true, historyLabel: 'Alignement');
   }
 
   Future<void> moveComponentBefore({
@@ -578,7 +622,7 @@ class ProjectProvider extends ChangeNotifier {
       ..clear()
       ..add(dragged.id);
     notifyListeners();
-    _schedulePersist(pushHistory: true);
+    _schedulePersist(pushHistory: true, historyLabel: 'Déplacement composant');
   }
 
   void clearSelectedComponent() {
@@ -610,7 +654,10 @@ class ProjectProvider extends ChangeNotifier {
     _replaceScreen(updatedScreen);
 
     notifyListeners();
-    _schedulePersist(pushHistory: true);
+    _schedulePersist(
+      pushHistory: true,
+      historyLabel: 'Modification propriétés',
+    );
   }
 
   Future<void> updateComponentPropertyById(
@@ -633,7 +680,10 @@ class ProjectProvider extends ChangeNotifier {
 
     _replaceScreen(screen.copyWith(components: updatedComponents));
     notifyListeners();
-    _schedulePersist(pushHistory: true);
+    _schedulePersist(
+      pushHistory: true,
+      historyLabel: 'Modification propriétés',
+    );
   }
 
   Future<void> updateActiveScreenBackgroundColor(int color) async {
@@ -645,7 +695,7 @@ class ProjectProvider extends ChangeNotifier {
     final updatedScreen = screen.copyWith(backgroundColor: color);
     _replaceScreen(updatedScreen);
     notifyListeners();
-    _schedulePersist(pushHistory: true);
+    _schedulePersist(pushHistory: true, historyLabel: 'Fond écran modifié');
   }
 
   Future<void> undo() async {
@@ -653,7 +703,7 @@ class ProjectProvider extends ChangeNotifier {
       return;
     }
     _historyIndex -= 1;
-    _restoreSnapshot(_history[_historyIndex]);
+    _restoreSnapshot(_history[_historyIndex].snapshot);
     notifyListeners();
     await _persistNow();
   }
@@ -663,9 +713,20 @@ class ProjectProvider extends ChangeNotifier {
       return;
     }
     _historyIndex += 1;
-    _restoreSnapshot(_history[_historyIndex]);
+    _restoreSnapshot(_history[_historyIndex].snapshot);
     notifyListeners();
     await _persistNow();
+  }
+
+  Future<bool> restoreHistoryAt(int index) async {
+    if (index < 0 || index >= _history.length || index == _historyIndex) {
+      return false;
+    }
+    _historyIndex = index;
+    _restoreSnapshot(_history[_historyIndex].snapshot);
+    notifyListeners();
+    await _persistNow();
+    return true;
   }
 
   String? screenNameById(String? screenId) {
@@ -698,22 +759,96 @@ class ProjectProvider extends ChangeNotifier {
     );
     notifyListeners();
     await _persistNow();
-    _recordHistorySnapshot();
+    _recordHistorySnapshot(label: 'Import projet JSON');
     return normalized;
   }
 
   Future<void> _persistNow() async {
-    await _storageService.saveProjects(_projects);
+    _lastSaveError = null;
+    _isSaving = true;
+    notifyListeners();
+    try {
+      await _storageService.saveProjects(_projects);
+      _hasPendingSave = false;
+      _lastSavedAt = DateTime.now();
+    } catch (error) {
+      _lastSaveError = error.toString();
+      rethrow;
+    } finally {
+      _isSaving = false;
+      notifyListeners();
+    }
   }
 
-  void _schedulePersist({required bool pushHistory}) {
+  void _schedulePersist({
+    required bool pushHistory,
+    String historyLabel = 'Modification',
+  }) {
+    final shouldNotifyPending = !_hasPendingSave;
+    _hasPendingSave = true;
+    _pendingHistoryLabel = historyLabel;
+    _lastSaveError = null;
+    if (shouldNotifyPending) {
+      notifyListeners();
+    }
     _saveDebounce?.cancel();
     _saveDebounce = Timer(const Duration(milliseconds: 250), () async {
-      await _storageService.saveProjects(_projects);
-      if (pushHistory) {
-        _recordHistorySnapshot();
-      }
+      await _flushPendingSave(
+        pushHistory: pushHistory,
+        historyLabel: historyLabel,
+      );
     });
+  }
+
+  Future<void> _flushPendingSave({
+    required bool pushHistory,
+    required String historyLabel,
+    bool force = false,
+  }) async {
+    if ((!_hasPendingSave && !force) || _isRestoringHistory) {
+      return;
+    }
+    if (_isSaving) {
+      _saveQueued = true;
+      return;
+    }
+
+    _isSaving = true;
+    _lastSaveError = null;
+    notifyListeners();
+
+    try {
+      await _storageService.saveProjects(_projects);
+      _hasPendingSave = false;
+      _lastSavedAt = DateTime.now();
+      if (pushHistory) {
+        _recordHistorySnapshot(label: historyLabel);
+      }
+    } catch (error) {
+      _lastSaveError = error.toString();
+    } finally {
+      _isSaving = false;
+      notifyListeners();
+      if (_saveQueued) {
+        _saveQueued = false;
+        _saveDebounce?.cancel();
+        _saveDebounce = Timer(const Duration(milliseconds: 120), () async {
+          await _flushPendingSave(
+            pushHistory: true,
+            historyLabel: _pendingHistoryLabel,
+          );
+        });
+      }
+    }
+  }
+
+  Future<void> forceSaveNow() async {
+    _saveDebounce?.cancel();
+    await _flushPendingSave(
+      pushHistory: false,
+      historyLabel: 'Sauvegarde manuelle',
+      force: true,
+    );
   }
 
   void _replaceScreen(ScreenModel updatedScreen) {
@@ -761,22 +896,46 @@ class ProjectProvider extends ChangeNotifier {
   void _resetHistory() {
     _history
       ..clear()
-      ..add(_snapshotState());
-    _historyIndex = 0;
+      ..add(
+        _HistoryEntry(
+          snapshot: _snapshotState(),
+          label: 'Initialisation',
+          createdAt: DateTime.now(),
+        ),
+      );
+    _historyIndex = _history.isEmpty ? -1 : 0;
   }
 
-  void _recordHistorySnapshot() {
+  void _recordHistorySnapshot({required String label}) {
     if (_isRestoringHistory) {
       return;
     }
     final snapshot = _snapshotState();
-    if (_historyIndex >= 0 && _history[_historyIndex] == snapshot) {
+    if (_historyIndex >= 0 && _history[_historyIndex].snapshot == snapshot) {
       return;
     }
     if (_historyIndex < _history.length - 1) {
       _history.removeRange(_historyIndex + 1, _history.length);
     }
-    _history.add(snapshot);
+
+    final now = DateTime.now();
+    if (_history.isNotEmpty && _historyIndex == _history.length - 1) {
+      final last = _history.last;
+      final isBurst =
+          now.difference(last.createdAt) < const Duration(seconds: 2);
+      if (isBurst && last.label == label) {
+        _history[_history.length - 1] = last.copyWith(
+          snapshot: snapshot,
+          createdAt: now,
+        );
+        _historyIndex = _history.length - 1;
+        return;
+      }
+    }
+
+    _history.add(
+      _HistoryEntry(snapshot: snapshot, label: label, createdAt: now),
+    );
     _historyIndex = _history.length - 1;
   }
 
@@ -852,6 +1011,13 @@ class ProjectProvider extends ChangeNotifier {
     return '$base (copie)';
   }
 
+  String _formatTime(DateTime value) {
+    final h = value.hour.toString().padLeft(2, '0');
+    final m = value.minute.toString().padLeft(2, '0');
+    final s = value.second.toString().padLeft(2, '0');
+    return '$h:$m:$s';
+  }
+
   @override
   void dispose() {
     _saveDebounce?.cancel();
@@ -908,7 +1074,7 @@ class ProjectProvider extends ChangeNotifier {
     _projects.insert(0, clonedProject);
     notifyListeners();
     await _persistNow();
-    _recordHistorySnapshot();
+    _recordHistorySnapshot(label: 'Duplication projet');
     return clonedProject;
   }
 
@@ -921,7 +1087,7 @@ class ProjectProvider extends ChangeNotifier {
     _replaceProject(project.copyWith(name: trimmed));
     notifyListeners();
     await _persistNow();
-    _recordHistorySnapshot();
+    _recordHistorySnapshot(label: 'Renommage projet');
     return true;
   }
 
@@ -934,7 +1100,11 @@ class ProjectProvider extends ChangeNotifier {
     final components = <UIComponentModel>[];
 
     UIComponentModel c(ComponentType type, Map<String, dynamic> props) =>
-        UIComponentModel(id: IdGenerator.next('component'), type: type, properties: props);
+        UIComponentModel(
+          id: IdGenerator.next('component'),
+          type: type,
+          properties: props,
+        );
 
     Map<String, dynamic> base({
       required String text,
@@ -981,64 +1151,137 @@ class ProjectProvider extends ChangeNotifier {
     switch (template) {
       case ScreenTemplateType.login:
         components.add(
-          c(ComponentType.appBar, base(text: 'Connexion', width: 320, height: 64)),
+          c(
+            ComponentType.appBar,
+            base(text: 'Connexion', width: 320, height: 64),
+          ),
         );
         components.add(
-          c(ComponentType.text, base(text: 'Bienvenue', width: 280, height: 72)..['fontSize'] = 24.0),
+          c(
+            ComponentType.text,
+            base(text: 'Bienvenue', width: 280, height: 72)
+              ..['fontSize'] = 24.0,
+          ),
         );
-        components.add(c(ComponentType.textField, base(text: 'Email', width: 280, height: 62)));
         components.add(
-          c(ComponentType.textField, base(text: 'Mot de passe', width: 280, height: 62)),
+          c(
+            ComponentType.textField,
+            base(text: 'Email', width: 280, height: 62),
+          ),
         );
         components.add(
-          c(ComponentType.button, base(text: 'Se connecter', width: 240, height: 54)),
+          c(
+            ComponentType.textField,
+            base(text: 'Mot de passe', width: 280, height: 62),
+          ),
+        );
+        components.add(
+          c(
+            ComponentType.button,
+            base(text: 'Se connecter', width: 240, height: 54),
+          ),
         );
         break;
       case ScreenTemplateType.dashboard:
         components.add(
-          c(ComponentType.appBar, base(text: 'Dashboard', width: 320, height: 64)),
+          c(
+            ComponentType.appBar,
+            base(text: 'Dashboard', width: 320, height: 64),
+          ),
         );
         components.add(
-          c(ComponentType.statCard, base(text: '12 480', width: 160, height: 108, row: 0)..['subtitle'] = 'Utilisateurs'),
+          c(
+            ComponentType.statCard,
+            base(text: '12 480', width: 160, height: 108, row: 0)
+              ..['subtitle'] = 'Utilisateurs',
+          ),
         );
         components.add(
-          c(ComponentType.statCard, base(text: '4 210', width: 160, height: 108, row: 0)..['subtitle'] = 'Commandes'),
+          c(
+            ComponentType.statCard,
+            base(text: '4 210', width: 160, height: 108, row: 0)
+              ..['subtitle'] = 'Commandes',
+          ),
         );
         components.add(
-          c(ComponentType.banner, base(text: 'Objectif mensuel: 82%', width: 320, height: 90)),
+          c(
+            ComponentType.banner,
+            base(text: 'Objectif mensuel: 82%', width: 320, height: 90),
+          ),
         );
         components.add(
-          c(ComponentType.progressBar, base(text: 'Progress', width: 320, height: 28)..['progress'] = 0.82),
+          c(
+            ComponentType.progressBar,
+            base(text: 'Progress', width: 320, height: 28)..['progress'] = 0.82,
+          ),
         );
         break;
       case ScreenTemplateType.profile:
         components.add(
-          c(ComponentType.appBar, base(text: 'Mon profil', width: 320, height: 64)),
-        );
-        components.add(c(ComponentType.avatar, base(text: 'N', width: 120, height: 120)));
-        components.add(c(ComponentType.text, base(text: 'Nabu Designer', width: 280, height: 60)));
-        components.add(
-          c(ComponentType.listTile, base(text: 'Mes informations', width: 320, height: 76)..['subtitle'] = 'Email, téléphone'),
+          c(
+            ComponentType.appBar,
+            base(text: 'Mon profil', width: 320, height: 64),
+          ),
         );
         components.add(
-          c(ComponentType.listTile, base(text: 'Paramètres', width: 320, height: 76)..['subtitle'] = 'Préférences'),
+          c(ComponentType.avatar, base(text: 'N', width: 120, height: 120)),
         );
         components.add(
-          c(ComponentType.button, base(text: 'Se déconnecter', width: 220, height: 52)),
+          c(
+            ComponentType.text,
+            base(text: 'Nabu Designer', width: 280, height: 60),
+          ),
+        );
+        components.add(
+          c(
+            ComponentType.listTile,
+            base(text: 'Mes informations', width: 320, height: 76)
+              ..['subtitle'] = 'Email, téléphone',
+          ),
+        );
+        components.add(
+          c(
+            ComponentType.listTile,
+            base(text: 'Paramètres', width: 320, height: 76)
+              ..['subtitle'] = 'Préférences',
+          ),
+        );
+        components.add(
+          c(
+            ComponentType.button,
+            base(text: 'Se déconnecter', width: 220, height: 52),
+          ),
         );
         break;
       case ScreenTemplateType.onboarding:
         components.add(
-          c(ComponentType.imagePlaceholder, base(text: 'Illustration', width: 300, height: 220)),
+          c(
+            ComponentType.imagePlaceholder,
+            base(text: 'Illustration', width: 300, height: 220),
+          ),
         );
         components.add(
-          c(ComponentType.text, base(text: 'Crée des interfaces rapidement', width: 300, height: 80)..['fontSize'] = 22.0),
+          c(
+            ComponentType.text,
+            base(text: 'Crée des interfaces rapidement', width: 300, height: 80)
+              ..['fontSize'] = 22.0,
+          ),
         );
         components.add(
-          c(ComponentType.text, base(text: 'Glisse, ajuste, exporte en Flutter.', width: 300, height: 70)..['fontSize'] = 14.0),
+          c(
+            ComponentType.text,
+            base(
+              text: 'Glisse, ajuste, exporte en Flutter.',
+              width: 300,
+              height: 70,
+            )..['fontSize'] = 14.0,
+          ),
         );
         components.add(
-          c(ComponentType.button, base(text: 'Commencer', width: 220, height: 54)),
+          c(
+            ComponentType.button,
+            base(text: 'Commencer', width: 220, height: 54),
+          ),
         );
         components.add(
           c(ComponentType.button, base(text: 'Passer', width: 180, height: 48)),
@@ -1051,6 +1294,30 @@ class ProjectProvider extends ChangeNotifier {
       name: '${template.label} $number',
       components: components,
       backgroundColor: 0xFFFFFFFF,
+    );
+  }
+}
+
+class _HistoryEntry {
+  const _HistoryEntry({
+    required this.snapshot,
+    required this.label,
+    required this.createdAt,
+  });
+
+  final String snapshot;
+  final String label;
+  final DateTime createdAt;
+
+  _HistoryEntry copyWith({
+    String? snapshot,
+    String? label,
+    DateTime? createdAt,
+  }) {
+    return _HistoryEntry(
+      snapshot: snapshot ?? this.snapshot,
+      label: label ?? this.label,
+      createdAt: createdAt ?? this.createdAt,
     );
   }
 }

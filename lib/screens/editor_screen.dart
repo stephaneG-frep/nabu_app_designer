@@ -55,45 +55,49 @@ class _EditorScreenState extends State<EditorScreen> {
     }
 
     final isWide = MediaQuery.of(context).size.width >= 900;
+    final isCompactTopBar = MediaQuery.of(context).size.width < 520;
 
     return Scaffold(
       appBar: AppBar(
         title: Text('Éditeur · ${project.name}'),
         actions: [
-          IconButton(
-            tooltip: 'Annuler',
-            onPressed: provider.canUndo ? provider.undo : null,
-            icon: const Icon(Icons.undo_rounded),
-          ),
-          IconButton(
-            tooltip: 'Rétablir',
-            onPressed: provider.canRedo ? provider.redo : null,
-            icon: const Icon(Icons.redo_rounded),
-          ),
-          IconButton(
-            tooltip: 'Plein écran',
-            onPressed: () {
-              Navigator.of(context).push(
-                MaterialPageRoute<void>(
-                  builder: (_) => FullPreviewScreen(projectId: project.id),
-                ),
-              );
-            },
-            icon: const Icon(Icons.fullscreen_rounded),
-          ),
-          IconButton(
-            tooltip: 'Mode d’emploi',
-            onPressed: () {
-              Navigator.of(context).push(
-                MaterialPageRoute<void>(builder: (_) => const HelpScreen()),
-              );
-            },
-            icon: const Icon(Icons.help_outline_rounded),
-          ),
+          if (!isCompactTopBar) ...[
+            IconButton(
+              tooltip: 'Annuler',
+              onPressed: provider.canUndo ? provider.undo : null,
+              icon: const Icon(Icons.undo_rounded),
+            ),
+            IconButton(
+              tooltip: 'Rétablir',
+              onPressed: provider.canRedo ? provider.redo : null,
+              icon: const Icon(Icons.redo_rounded),
+            ),
+          ],
           PopupMenuButton<_EditorMenuAction>(
             tooltip: 'Plus d’actions',
             onSelected: (action) {
               switch (action) {
+                case _EditorMenuAction.undo:
+                  provider.undo();
+                  break;
+                case _EditorMenuAction.redo:
+                  provider.redo();
+                  break;
+                case _EditorMenuAction.openTimeline:
+                  _showHistoryTimeline(context);
+                  break;
+                case _EditorMenuAction.openFullscreen:
+                  Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => FullPreviewScreen(projectId: project.id),
+                    ),
+                  );
+                  break;
+                case _EditorMenuAction.openHelp:
+                  Navigator.of(context).push(
+                    MaterialPageRoute<void>(builder: (_) => const HelpScreen()),
+                  );
+                  break;
                 case _EditorMenuAction.duplicate:
                   provider.duplicateSelectedComponent();
                   break;
@@ -129,6 +133,9 @@ class _EditorScreenState extends State<EditorScreen> {
                   break;
                 case _EditorMenuAction.exportJson:
                   _exportProjectJson(context);
+                  break;
+                case _EditorMenuAction.exportJsonEmail:
+                  _exportProjectJsonEmail(context);
                   break;
                 case _EditorMenuAction.importJson:
                   _importProjectJson(context);
@@ -167,6 +174,32 @@ class _EditorScreenState extends State<EditorScreen> {
               }
             },
             itemBuilder: (context) => [
+              if (isCompactTopBar) ...[
+                PopupMenuItem(
+                  value: _EditorMenuAction.undo,
+                  enabled: provider.canUndo,
+                  child: const Text('Annuler'),
+                ),
+                PopupMenuItem(
+                  value: _EditorMenuAction.redo,
+                  enabled: provider.canRedo,
+                  child: const Text('Rétablir'),
+                ),
+                const PopupMenuDivider(),
+              ],
+              const PopupMenuItem(
+                value: _EditorMenuAction.openTimeline,
+                child: Text('Historique visuel'),
+              ),
+              const PopupMenuItem(
+                value: _EditorMenuAction.openFullscreen,
+                child: Text('Plein écran'),
+              ),
+              const PopupMenuItem(
+                value: _EditorMenuAction.openHelp,
+                child: Text('Mode d’emploi'),
+              ),
+              const PopupMenuDivider(),
               CheckedPopupMenuItem(
                 value: _EditorMenuAction.toggleDragMode,
                 checked: _dragModeEnabled,
@@ -244,6 +277,10 @@ class _EditorScreenState extends State<EditorScreen> {
                 child: Text('Exporter JSON'),
               ),
               const PopupMenuItem(
+                value: _EditorMenuAction.exportJsonEmail,
+                child: Text('Exporter JSON par mail'),
+              ),
+              const PopupMenuItem(
                 value: _EditorMenuAction.importJson,
                 child: Text('Importer JSON'),
               ),
@@ -319,6 +356,19 @@ class _EditorScreenState extends State<EditorScreen> {
                         ? 'Mode drag activé · fais glisser pour déplacer'
                         : 'Mode drag désactivé · scroll fluide + appui long multi-sélection',
                     style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ),
+              ),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: _SaveStatusRow(
+                    label: provider.saveStatusLabel,
+                    isSaving: provider.isSaving,
+                    hasPendingSave: provider.hasPendingSave,
+                    hasError: provider.lastSaveError != null,
+                    onSaveNow: () => provider.forceSaveNow(),
                   ),
                 ),
               ),
@@ -439,6 +489,92 @@ class _EditorScreenState extends State<EditorScreen> {
         ),
       ),
     );
+  }
+
+  Future<void> _showHistoryTimeline(BuildContext context) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (sheetContext) => SafeArea(
+        child: FractionallySizedBox(
+          heightFactor: 0.82,
+          child: Consumer<ProjectProvider>(
+            builder: (context, provider, _) {
+              final entries = provider.historyTimeline.reversed.toList();
+              return Column(
+                children: [
+                  ListTile(
+                    title: const Text('Historique visuel'),
+                    subtitle: Text(provider.saveStatusLabel),
+                    trailing: FilledButton.icon(
+                      onPressed: () => provider.forceSaveNow(),
+                      icon: const Icon(Icons.save_rounded, size: 18),
+                      label: const Text('Sauver'),
+                    ),
+                  ),
+                  const Divider(height: 1),
+                  Expanded(
+                    child: entries.isEmpty
+                        ? const Center(
+                            child: Text('Aucun point d’historique disponible.'),
+                          )
+                        : ListView.separated(
+                            itemCount: entries.length,
+                            separatorBuilder: (_, _) =>
+                                const Divider(height: 1),
+                            itemBuilder: (context, index) {
+                              final entry = entries[index];
+                              return ListTile(
+                                leading: Icon(
+                                  entry.isCurrent
+                                      ? Icons.radio_button_checked_rounded
+                                      : Icons.radio_button_unchecked_rounded,
+                                  color: entry.isCurrent
+                                      ? Theme.of(context).colorScheme.primary
+                                      : null,
+                                ),
+                                title: Text(entry.label),
+                                subtitle: Text(
+                                  _formatTimelineTimestamp(entry.createdAt),
+                                ),
+                                trailing: entry.isCurrent
+                                    ? const Chip(label: Text('Actuel'))
+                                    : null,
+                                onTap: () async {
+                                  final restored = await provider
+                                      .restoreHistoryAt(entry.index);
+                                  if (!context.mounted || !restored) {
+                                    return;
+                                  }
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text(
+                                        'État restauré: ${entry.label}',
+                                      ),
+                                    ),
+                                  );
+                                },
+                              );
+                            },
+                          ),
+                  ),
+                ],
+              );
+            },
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _formatTimelineTimestamp(DateTime value) {
+    final d = value.day.toString().padLeft(2, '0');
+    final m = value.month.toString().padLeft(2, '0');
+    final h = value.hour.toString().padLeft(2, '0');
+    final min = value.minute.toString().padLeft(2, '0');
+    final s = value.second.toString().padLeft(2, '0');
+    return '$d/$m $h:$min:$s';
   }
 
   Future<void> _showAddComponent(BuildContext context) async {
@@ -600,6 +736,41 @@ class _EditorScreenState extends State<EditorScreen> {
             child: const Text('Fermer'),
           ),
         ],
+      ),
+    );
+  }
+
+  Future<void> _exportProjectJsonEmail(BuildContext context) async {
+    final project = context.read<ProjectProvider>().activeProject;
+    if (project == null) {
+      return;
+    }
+
+    final path = await _projectFileService.exportProjectToFile(project);
+
+    try {
+      await Share.shareXFiles(
+        [XFile(path)],
+        subject: 'Projet UI JSON - ${project.name}',
+        text:
+            'Bonjour,\n\nVoici l’export JSON du projet "${project.name}".\n\nGénéré avec Nabu App Designer.',
+      );
+    } catch (_) {
+      if (!context.mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Impossible d’ouvrir le partage e-mail.')),
+      );
+      return;
+    }
+
+    if (!context.mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Choisis ton app e-mail pour envoyer le JSON.'),
       ),
     );
   }
@@ -924,7 +1095,70 @@ class _EditorScreenState extends State<EditorScreen> {
   }
 }
 
+class _SaveStatusRow extends StatelessWidget {
+  const _SaveStatusRow({
+    required this.label,
+    required this.isSaving,
+    required this.hasPendingSave,
+    required this.hasError,
+    required this.onSaveNow,
+  });
+
+  final String label;
+  final bool isSaving;
+  final bool hasPendingSave;
+  final bool hasError;
+  final VoidCallback onSaveNow;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = hasError
+        ? Theme.of(context).colorScheme.error
+        : hasPendingSave
+        ? Theme.of(context).colorScheme.tertiary
+        : Theme.of(context).colorScheme.primary;
+    final icon = hasError
+        ? Icons.error_outline_rounded
+        : isSaving
+        ? Icons.sync_rounded
+        : hasPendingSave
+        ? Icons.pending_outlined
+        : Icons.cloud_done_outlined;
+
+    return Row(
+      children: [
+        Icon(icon, size: 16, color: color),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            label,
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: color),
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+        const SizedBox(width: 8),
+        OutlinedButton.icon(
+          onPressed: onSaveNow,
+          icon: const Icon(Icons.save_outlined, size: 16),
+          label: const Text('Sauver'),
+          style: OutlinedButton.styleFrom(
+            visualDensity: VisualDensity.compact,
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 enum _EditorMenuAction {
+  undo,
+  redo,
+  openTimeline,
+  openFullscreen,
+  openHelp,
   toggleDragMode,
   toggleGridSnap,
   duplicate,
@@ -940,6 +1174,7 @@ enum _EditorMenuAction {
   unlockSelection,
   addTemplateScreen,
   exportJson,
+  exportJsonEmail,
   importJson,
   exportJsonFile,
   importJsonFile,

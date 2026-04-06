@@ -34,8 +34,9 @@ class _QuickGuideTab extends StatelessWidget {
       '3. Sélectionne un composant et modifie ses propriétés.',
       '4. Active Mode drag pour glisser-déposer.',
       '5. Active Mode grille + snap pour caler les éléments.',
-      '6. Utilise Calques pour verrouiller/masquer rapidement.',
-      '7. Exporte JSON ou génère le code Flutter.',
+      '6. Utilise Calques (recherche + filtres) pour retrouver vite un élément.',
+      '7. Exporte JSON/ZIP et partage par e-mail si besoin.',
+      '8. Ouvre la timeline pour revenir à un état précédent.',
     ];
 
     return ListView(
@@ -119,9 +120,16 @@ class _FullGuideTab extends StatelessWidget {
         ),
         SizedBox(height: 12),
         _InfoCard(
+          title: 'Autosave Et Timeline',
+          child: Text(
+            'L’application sauvegarde automatiquement les modifications. Tu peux forcer une sauvegarde avec le bouton Sauver et restaurer un point précédent avec l’icône timeline.',
+          ),
+        ),
+        SizedBox(height: 12),
+        _InfoCard(
           title: 'Export',
           child: Text(
-            'Depuis le menu actions: Export JSON, Import JSON, Générer code Flutter.',
+            'Depuis le menu actions: export/import JSON, export fichier JSON, export ZIP Flutter V2, export par mail et génération du code Flutter.',
           ),
         ),
       ],

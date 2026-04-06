@@ -83,6 +83,30 @@ class _EditorScreenState extends State<EditorScreen> {
                 case _EditorMenuAction.redo:
                   provider.redo();
                   break;
+                case _EditorMenuAction.copySelection:
+                  _copySelection(context);
+                  break;
+                case _EditorMenuAction.pasteSelection:
+                  _pasteSelection(context);
+                  break;
+                case _EditorMenuAction.groupSelection:
+                  _groupSelection(context);
+                  break;
+                case _EditorMenuAction.ungroupSelection:
+                  _ungroupSelection(context);
+                  break;
+                case _EditorMenuAction.selectGroup:
+                  _selectGroup(context);
+                  break;
+                case _EditorMenuAction.saveSelectionAsTemplate:
+                  _saveSelectionAsTemplate(context);
+                  break;
+                case _EditorMenuAction.nestSelection:
+                  _nestSelection(context);
+                  break;
+                case _EditorMenuAction.detachFromParent:
+                  _detachFromParent(context);
+                  break;
                 case _EditorMenuAction.openTimeline:
                   _showHistoryTimeline(context);
                   break;
@@ -152,14 +176,26 @@ class _EditorScreenState extends State<EditorScreen> {
                 case _EditorMenuAction.generateFlutterCodeV2:
                   _showGeneratedFlutterCodeV2(context);
                   break;
+                case _EditorMenuAction.generateFlutterCodePro:
+                  _showGeneratedFlutterCodePro(context);
+                  break;
                 case _EditorMenuAction.exportFlutterV2Zip:
                   _exportFlutterV2Zip(context);
                   break;
                 case _EditorMenuAction.exportFlutterV2Email:
                   _exportFlutterV2Email(context);
                   break;
+                case _EditorMenuAction.exportFlutterProZip:
+                  _exportFlutterProZip(context);
+                  break;
+                case _EditorMenuAction.exportFlutterProEmail:
+                  _exportFlutterProEmail(context);
+                  break;
                 case _EditorMenuAction.addTemplateScreen:
                   _showTemplatePicker(context);
+                  break;
+                case _EditorMenuAction.openTemplateLibrary:
+                  _showComponentTemplateLibrary(context);
                   break;
                 case _EditorMenuAction.toggleGridSnap:
                   setState(() {
@@ -217,6 +253,46 @@ class _EditorScreenState extends State<EditorScreen> {
                 child: const Text('Dupliquer'),
               ),
               PopupMenuItem(
+                value: _EditorMenuAction.copySelection,
+                enabled: provider.hasSelection,
+                child: const Text('Copier sélection'),
+              ),
+              PopupMenuItem(
+                value: _EditorMenuAction.pasteSelection,
+                enabled: provider.hasClipboard,
+                child: const Text('Coller'),
+              ),
+              PopupMenuItem(
+                value: _EditorMenuAction.groupSelection,
+                enabled: provider.canGroupSelection,
+                child: const Text('Grouper sélection'),
+              ),
+              PopupMenuItem(
+                value: _EditorMenuAction.ungroupSelection,
+                enabled: provider.canUngroupSelection,
+                child: const Text('Dégrouper sélection'),
+              ),
+              PopupMenuItem(
+                value: _EditorMenuAction.selectGroup,
+                enabled: provider.canSelectGroupOfSelection,
+                child: const Text('Sélectionner le groupe'),
+              ),
+              PopupMenuItem(
+                value: _EditorMenuAction.saveSelectionAsTemplate,
+                enabled: provider.hasSelection,
+                child: const Text('Enregistrer en template'),
+              ),
+              PopupMenuItem(
+                value: _EditorMenuAction.nestSelection,
+                enabled: provider.canNestSelection,
+                child: const Text('Imbriquer sous sélection'),
+              ),
+              PopupMenuItem(
+                value: _EditorMenuAction.detachFromParent,
+                enabled: provider.canDetachFromParent,
+                child: const Text('Sortir du parent'),
+              ),
+              PopupMenuItem(
                 value: _EditorMenuAction.bringFront,
                 enabled: provider.hasSelection,
                 child: const Text('Premier plan'),
@@ -271,6 +347,10 @@ class _EditorScreenState extends State<EditorScreen> {
                 value: _EditorMenuAction.addTemplateScreen,
                 child: Text('Ajouter écran template'),
               ),
+              const PopupMenuItem(
+                value: _EditorMenuAction.openTemplateLibrary,
+                child: Text('Bibliothèque templates'),
+              ),
               const PopupMenuDivider(),
               const PopupMenuItem(
                 value: _EditorMenuAction.exportJson,
@@ -301,12 +381,24 @@ class _EditorScreenState extends State<EditorScreen> {
                 child: Text('Générer Flutter V2'),
               ),
               const PopupMenuItem(
+                value: _EditorMenuAction.generateFlutterCodePro,
+                child: Text('Générer Flutter Pro'),
+              ),
+              const PopupMenuItem(
                 value: _EditorMenuAction.exportFlutterV2Zip,
                 child: Text('Exporter Flutter V2 (.zip)'),
               ),
               const PopupMenuItem(
                 value: _EditorMenuAction.exportFlutterV2Email,
                 child: Text('Exporter par mail'),
+              ),
+              const PopupMenuItem(
+                value: _EditorMenuAction.exportFlutterProZip,
+                child: Text('Exporter Flutter Pro (.zip)'),
+              ),
+              const PopupMenuItem(
+                value: _EditorMenuAction.exportFlutterProEmail,
+                child: Text('Exporter Flutter Pro par mail'),
               ),
             ],
           ),
@@ -506,11 +598,27 @@ class _EditorScreenState extends State<EditorScreen> {
                 children: [
                   ListTile(
                     title: const Text('Historique visuel'),
-                    subtitle: Text(provider.saveStatusLabel),
-                    trailing: FilledButton.icon(
-                      onPressed: () => provider.forceSaveNow(),
-                      icon: const Icon(Icons.save_rounded, size: 18),
-                      label: const Text('Sauver'),
+                    subtitle: Text(
+                      '${provider.saveStatusLabel} · ${provider.historyEntryCount} points',
+                    ),
+                    trailing: Wrap(
+                      spacing: 8,
+                      children: [
+                        OutlinedButton.icon(
+                          onPressed: () =>
+                              _confirmAndClearHistory(sheetContext),
+                          icon: const Icon(
+                            Icons.delete_sweep_rounded,
+                            size: 18,
+                          ),
+                          label: const Text('Vider'),
+                        ),
+                        FilledButton.icon(
+                          onPressed: () => provider.forceSaveNow(),
+                          icon: const Icon(Icons.save_rounded, size: 18),
+                          label: const Text('Sauver'),
+                        ),
+                      ],
                     ),
                   ),
                   const Divider(height: 1),
@@ -577,13 +685,67 @@ class _EditorScreenState extends State<EditorScreen> {
     return '$d/$m $h:$min:$s';
   }
 
+  Future<void> _confirmAndClearHistory(BuildContext context) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Vider l’historique ?'),
+        content: const Text(
+          'Cette action supprime les points précédents et garde uniquement l’état actuel.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Annuler'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Vider'),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true || !context.mounted) {
+      return;
+    }
+    final messenger = ScaffoldMessenger.of(context);
+    await context.read<ProjectProvider>().clearHistoryKeepingCurrent();
+    if (!context.mounted) {
+      return;
+    }
+    messenger.showSnackBar(
+      const SnackBar(content: Text('Historique vidé. État actuel conservé.')),
+    );
+  }
+
   Future<void> _showAddComponent(BuildContext context) async {
-    final provider = context.read<ProjectProvider>();
     await showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
-      builder: (context) =>
-          AddComponentSheet(onSelected: provider.addComponent),
+      builder: (context) => Consumer<ProjectProvider>(
+        builder: (context, provider, _) => AddComponentSheet(
+          onSelected: provider.addComponent,
+          templates: provider.componentTemplates,
+          onSelectedTemplate: (template) async {
+            await provider.insertComponentTemplate(template.id);
+          },
+          onDeleteTemplate: (template) async {
+            final ok = await provider.deleteComponentTemplate(template.id);
+            if (!context.mounted) {
+              return;
+            }
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  ok
+                      ? 'Template supprimé.'
+                      : 'Suppression template impossible.',
+                ),
+              ),
+            );
+          },
+        ),
+      ),
     );
   }
 
@@ -711,6 +873,158 @@ class _EditorScreenState extends State<EditorScreen> {
       return;
     }
     await provider.updateSelectedComponentProperty('imagePath', file.path);
+  }
+
+  Future<void> _copySelection(BuildContext context) async {
+    final provider = context.read<ProjectProvider>();
+    final ok = await provider.copySelectedComponents();
+    if (!context.mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          ok ? 'Sélection copiée.' : 'Impossible de copier la sélection.',
+        ),
+      ),
+    );
+  }
+
+  Future<void> _pasteSelection(BuildContext context) async {
+    final provider = context.read<ProjectProvider>();
+    final ok = await provider.pasteClipboardComponents();
+    if (!context.mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(ok ? 'Composants collés.' : 'Presse-papiers vide.'),
+      ),
+    );
+  }
+
+  Future<void> _groupSelection(BuildContext context) async {
+    final provider = context.read<ProjectProvider>();
+    final ok = await provider.groupSelectedComponents();
+    if (!context.mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          ok
+              ? 'Sélection groupée.'
+              : 'Sélectionne au moins 2 éléments non verrouillés.',
+        ),
+      ),
+    );
+  }
+
+  Future<void> _saveSelectionAsTemplate(BuildContext context) async {
+    final provider = context.read<ProjectProvider>();
+    if (!provider.hasSelection) {
+      return;
+    }
+
+    final controller = TextEditingController(text: 'Mon template');
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Enregistrer en template'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: const InputDecoration(labelText: 'Nom du template'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Annuler'),
+          ),
+          FilledButton(
+            onPressed: () async {
+              final ok = await provider.saveSelectionAsComponentTemplate(
+                controller.text,
+              );
+              if (dialogContext.mounted) {
+                Navigator.of(dialogContext).pop();
+              }
+              if (!context.mounted) {
+                return;
+              }
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(
+                    ok
+                        ? 'Template enregistré. Ouvre Ajouter composant > Mes templates.'
+                        : 'Nom invalide ou sélection vide.',
+                  ),
+                ),
+              );
+            },
+            child: const Text('Enregistrer'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _ungroupSelection(BuildContext context) async {
+    final provider = context.read<ProjectProvider>();
+    final ok = await provider.ungroupSelectedComponents();
+    if (!context.mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(ok ? 'Groupe supprimé.' : 'Aucun groupe à dissocier.'),
+      ),
+    );
+  }
+
+  Future<void> _nestSelection(BuildContext context) async {
+    final provider = context.read<ProjectProvider>();
+    final ok = await provider.nestSelectedUnderCurrent();
+    if (!context.mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          ok
+              ? 'Composants imbriqués.'
+              : 'Sélectionne un parent (Container/Card/Banner) et au moins un enfant.',
+        ),
+      ),
+    );
+  }
+
+  Future<void> _detachFromParent(BuildContext context) async {
+    final provider = context.read<ProjectProvider>();
+    final ok = await provider.detachSelectedFromParent();
+    if (!context.mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          ok ? 'Composants sortis du parent.' : 'Aucun parent à retirer.',
+        ),
+      ),
+    );
+  }
+
+  void _selectGroup(BuildContext context) {
+    final provider = context.read<ProjectProvider>();
+    final ok = provider.selectGroupOfSelectedComponent();
+    if (!context.mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(ok ? 'Groupe sélectionné.' : 'Aucun groupe associé.'),
+      ),
+    );
   }
 
   Future<void> _exportProjectJson(BuildContext context) async {
@@ -908,6 +1222,23 @@ class _EditorScreenState extends State<EditorScreen> {
     );
   }
 
+  Future<void> _showGeneratedFlutterCodePro(BuildContext context) async {
+    final project = context.read<ProjectProvider>().activeProject;
+    if (project == null) {
+      return;
+    }
+    final bundle = _codeGenerator.generateProjectBundlePro(project);
+    if (!context.mounted) {
+      return;
+    }
+    await _showCodeDialog(
+      context: context,
+      title: 'Code Flutter Pro',
+      description: 'Structure app/router/theme/screens plus propre.',
+      code: bundle,
+    );
+  }
+
   Future<void> _exportFlutterV2Zip(BuildContext context) async {
     final project = context.read<ProjectProvider>().activeProject;
     if (project == null) {
@@ -925,6 +1256,25 @@ class _EditorScreenState extends State<EditorScreen> {
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(SnackBar(content: Text('ZIP Flutter exporté: $path')));
+  }
+
+  Future<void> _exportFlutterProZip(BuildContext context) async {
+    final project = context.read<ProjectProvider>().activeProject;
+    if (project == null) {
+      return;
+    }
+
+    final files = _codeGenerator.generateProjectFilesPro(project);
+    final path = await _projectFileService.exportFlutterProZip(
+      project: project,
+      generatedFiles: files,
+    );
+    if (!context.mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('ZIP Flutter Pro exporté: $path')));
   }
 
   Future<void> _exportFlutterV2Email(BuildContext context) async {
@@ -962,6 +1312,45 @@ class _EditorScreenState extends State<EditorScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
         content: Text('Choisis ton app e-mail pour envoyer le ZIP.'),
+      ),
+    );
+  }
+
+  Future<void> _exportFlutterProEmail(BuildContext context) async {
+    final project = context.read<ProjectProvider>().activeProject;
+    if (project == null) {
+      return;
+    }
+
+    final files = _codeGenerator.generateProjectFilesPro(project);
+    final path = await _projectFileService.exportFlutterProZip(
+      project: project,
+      generatedFiles: files,
+    );
+
+    try {
+      await Share.shareXFiles(
+        [XFile(path)],
+        subject: 'Export Flutter Pro - ${project.name}',
+        text:
+            'Bonjour,\n\nVoici l’export Flutter Pro du projet "${project.name}".\n\nGénéré avec Nabu App Designer.',
+      );
+    } catch (_) {
+      if (!context.mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Impossible d’ouvrir le partage e-mail.')),
+      );
+      return;
+    }
+
+    if (!context.mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Choisis ton app e-mail pour envoyer le ZIP Pro.'),
       ),
     );
   }
@@ -1093,6 +1482,80 @@ class _EditorScreenState extends State<EditorScreen> {
       ),
     );
   }
+
+  Future<void> _showComponentTemplateLibrary(BuildContext context) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) => SafeArea(
+        child: Consumer<ProjectProvider>(
+          builder: (context, provider, _) {
+            final templates = provider.componentTemplates;
+            if (templates.isEmpty) {
+              return const ListTile(
+                leading: Icon(Icons.info_outline_rounded),
+                title: Text('Aucun template enregistré'),
+                subtitle: Text(
+                  'Sélectionne des éléments puis Plus d’actions > Enregistrer en template.',
+                ),
+              );
+            }
+            return ListView(
+              shrinkWrap: true,
+              children: templates
+                  .map(
+                    (template) => ListTile(
+                      leading: const Icon(Icons.bookmarks_outlined),
+                      title: Text(template.name),
+                      subtitle: Text(
+                        '${template.components.length} élément(s)',
+                      ),
+                      trailing: IconButton(
+                        tooltip: 'Supprimer template',
+                        onPressed: () async {
+                          final ok = await provider.deleteComponentTemplate(
+                            template.id,
+                          );
+                          if (!context.mounted) {
+                            return;
+                          }
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                ok
+                                    ? 'Template supprimé.'
+                                    : 'Suppression impossible.',
+                              ),
+                            ),
+                          );
+                        },
+                        icon: const Icon(Icons.delete_outline_rounded),
+                      ),
+                      onTap: () async {
+                        final ok = await provider.insertComponentTemplate(
+                          template.id,
+                        );
+                        if (!context.mounted) {
+                          return;
+                        }
+                        Navigator.of(context).pop();
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              ok ? 'Template inséré.' : 'Insertion impossible.',
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  )
+                  .toList(),
+            );
+          },
+        ),
+      ),
+    );
+  }
 }
 
 class _SaveStatusRow extends StatelessWidget {
@@ -1159,6 +1622,14 @@ enum _EditorMenuAction {
   openTimeline,
   openFullscreen,
   openHelp,
+  copySelection,
+  pasteSelection,
+  groupSelection,
+  ungroupSelection,
+  selectGroup,
+  saveSelectionAsTemplate,
+  nestSelection,
+  detachFromParent,
   toggleDragMode,
   toggleGridSnap,
   duplicate,
@@ -1173,6 +1644,7 @@ enum _EditorMenuAction {
   lockSelection,
   unlockSelection,
   addTemplateScreen,
+  openTemplateLibrary,
   exportJson,
   exportJsonEmail,
   importJson,
@@ -1180,8 +1652,11 @@ enum _EditorMenuAction {
   importJsonFile,
   generateFlutterCode,
   generateFlutterCodeV2,
+  generateFlutterCodePro,
   exportFlutterV2Zip,
   exportFlutterV2Email,
+  exportFlutterProZip,
+  exportFlutterProEmail,
 }
 
 enum _PreviewSizeMode { reduced, normal, expanded }
@@ -1217,8 +1692,8 @@ class _WideLayout extends StatelessWidget {
     };
     final frameMaxWidth = switch (previewSizeMode) {
       _PreviewSizeMode.reduced => 340.0,
-      _PreviewSizeMode.normal => 390.0,
-      _PreviewSizeMode.expanded => 500.0,
+      _PreviewSizeMode.normal => 410.0,
+      _PreviewSizeMode.expanded => 520.0,
     };
 
     return Row(
@@ -1312,18 +1787,18 @@ class _NarrowLayout extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         final ratio = switch (previewSizeMode) {
-          _PreviewSizeMode.reduced => 0.45,
-          _PreviewSizeMode.normal => 0.62,
-          _PreviewSizeMode.expanded => 0.78,
+          _PreviewSizeMode.reduced => 0.52,
+          _PreviewSizeMode.normal => 0.68,
+          _PreviewSizeMode.expanded => 0.84,
         };
         final previewHeight = (constraints.maxHeight * ratio).clamp(
-          220.0,
-          760.0,
+          280.0,
+          820.0,
         );
         final frameMaxWidth = switch (previewSizeMode) {
-          _PreviewSizeMode.reduced => 320.0,
-          _PreviewSizeMode.normal => 390.0,
-          _PreviewSizeMode.expanded => 500.0,
+          _PreviewSizeMode.reduced => 340.0,
+          _PreviewSizeMode.normal => 410.0,
+          _PreviewSizeMode.expanded => 520.0,
         };
 
         return ListView(

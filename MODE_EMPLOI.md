@@ -39,6 +39,7 @@ Dans la barre des écrans :
 
 - Bouton `Ajouter composant`
 - Tu peux ajouter : Text, Button, Card, Image placeholder, TextField, AppBar, etc.
+- Dans cette feuille, tu retrouves aussi `Mes templates` (templates persos).
 
 ## 6. Sélection, multi-sélection, calques
 
@@ -122,13 +123,38 @@ Dans `Plus d’actions` :
 Sur la sélection courante :
 
 - dupliquer
+- copier sélection / coller
+- enregistrer en template
+- grouper sélection / dégrouper sélection
+- sélectionner le groupe
+- imbriquer sous sélection (parent/enfant)
+- sortir du parent
 - premier plan / arrière-plan
 - mettre sur même ligne / auto-ligne
 - aligner gauche / centre / droite
 - supprimer sélection
 - verrouiller / déverrouiller sélection
 
-## 13. Import / Export / Génération Flutter
+## 13. Arbre imbriqué (parent/enfant)
+
+- Le composant sélectionné peut devenir parent d’autres éléments.
+- Parents recommandés : `Container`, `Card`, `Banner`.
+- Workflow :
+- sélectionne le parent puis au moins un autre composant
+- `Plus d’actions > Imbriquer sous sélection`
+- pour revenir à plat : `Plus d’actions > Sortir du parent`
+
+Dans le panneau `Calques`, l’arborescence est affichée avec indentation.
+
+## 14. Contraintes responsive
+
+Dans `Propriétés > Responsive` :
+
+- `Visibilité` : tous écrans / mobile seulement / large écran seulement
+- `Largeur responsive` : fixe ou remplir disponible
+- `Alignement responsive` : hériter / gauche / centre / droite
+
+## 15. Import / Export / Génération Flutter
 
 Dans `Plus d’actions` :
 
@@ -139,17 +165,20 @@ Dans `Plus d’actions` :
 - `Importer JSON fichier` : charge un `.json` local
 - `Générer code Flutter` : génère du code Flutter (copiable)
 - `Générer Flutter V2` : bundle multi-fichiers (main + screens)
+- `Générer Flutter Pro` : bundle structuré (`app/`, `router/`, `theme/`, `screens/`)
 - `Exporter Flutter V2 (.zip)` : crée un zip prêt à récupérer
 - `Exporter par mail` : crée le zip Flutter et ouvre le partage Android (Gmail/mail)
+- `Exporter Flutter Pro (.zip)` : crée un zip Flutter Pro
+- `Exporter Flutter Pro par mail` : envoie le zip Pro via partage Android
 
-## 14. Conseils pratiques
+## 16. Conseils pratiques
 
-- Pour éditer vite : utilise le panneau calques + multi-sélection.
+- Pour éditer vite : utilise le panneau calques + multi-sélection + recherche.
 - Pour éviter les erreurs : verrouille les éléments finalisés.
 - Pour réorganiser proprement : active `Mode drag`, puis `Mode grille + snap`.
 - Pour présenter : utilise `Plein écran`.
 
-## 15. Dépannage rapide
+## 17. Dépannage rapide
 
 - Si le scroll est difficile : désactive `Mode drag`.
 - Si un composant ne bouge pas : vérifie qu'il n'est pas verrouillé.

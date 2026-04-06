@@ -81,6 +81,7 @@ class PropertyPanel extends StatelessWidget {
     final margin = ((props['margin'] as num?) ?? 0).toDouble();
     final radius = ((props['borderRadius'] as num?) ?? 12).toDouble();
     final row = ((props['row'] as num?) ?? -1).toInt();
+    final parentId = (props['parentId'] as String?) ?? '';
     final visible = (props['visible'] as bool?) ?? true;
     final locked = (props['locked'] as bool?) ?? false;
     final borderColor = (props['borderColor'] as int?) ?? colorValue;
@@ -93,6 +94,11 @@ class PropertyPanel extends StatelessWidget {
     final shadowOpacity = ((props['shadowOpacity'] as num?) ?? 0).toDouble();
     final shadowOffsetY = ((props['shadowOffsetY'] as num?) ?? 0).toDouble();
     final alignment = (props['alignment'] as String?) ?? 'center';
+    final responsiveVisibility =
+        (props['responsiveVisibility'] as String?) ?? 'all';
+    final responsiveWidthMode =
+        (props['responsiveWidthMode'] as String?) ?? 'fixed';
+    final responsiveAlign = (props['responsiveAlign'] as String?) ?? 'inherit';
     final actionType = (props['actionType'] as String?) ?? 'none';
     final targetScreenId = (props['targetScreenId'] as String?) ?? '';
     final imagePath = (props['imagePath'] as String?) ?? '';
@@ -279,6 +285,11 @@ class PropertyPanel extends StatelessWidget {
               ).textTheme.bodySmall?.copyWith(color: const Color(0xFF667085)),
             ),
             const SizedBox(height: 8),
+            Text(
+              parentId.isEmpty ? 'Parent: aucun' : 'Parent: $parentId',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            const SizedBox(height: 8),
             Text('Alignement', style: Theme.of(context).textTheme.labelLarge),
             const SizedBox(height: 8),
             SegmentedButton<String>(
@@ -299,6 +310,67 @@ class PropertyPanel extends StatelessWidget {
               selected: {alignment},
               onSelectionChanged: (selection) {
                 onUpdateProperty('alignment', selection.first);
+              },
+            ),
+            const _SectionTitle(title: 'Responsive'),
+            DropdownButtonFormField<String>(
+              initialValue: responsiveVisibility,
+              decoration: const InputDecoration(labelText: 'Visibilité'),
+              items: const [
+                DropdownMenuItem(value: 'all', child: Text('Tous écrans')),
+                DropdownMenuItem(
+                  value: 'mobileOnly',
+                  child: Text('Mobile seulement'),
+                ),
+                DropdownMenuItem(
+                  value: 'desktopOnly',
+                  child: Text('Large écran seulement'),
+                ),
+              ],
+              onChanged: (value) {
+                if (value == null) {
+                  return;
+                }
+                onUpdateProperty('responsiveVisibility', value);
+              },
+            ),
+            const SizedBox(height: 10),
+            DropdownButtonFormField<String>(
+              initialValue: responsiveWidthMode,
+              decoration: const InputDecoration(
+                labelText: 'Largeur responsive',
+              ),
+              items: const [
+                DropdownMenuItem(value: 'fixed', child: Text('Fixe')),
+                DropdownMenuItem(
+                  value: 'fill',
+                  child: Text('Remplir disponible'),
+                ),
+              ],
+              onChanged: (value) {
+                if (value == null) {
+                  return;
+                }
+                onUpdateProperty('responsiveWidthMode', value);
+              },
+            ),
+            const SizedBox(height: 10),
+            DropdownButtonFormField<String>(
+              initialValue: responsiveAlign,
+              decoration: const InputDecoration(
+                labelText: 'Alignement responsive',
+              ),
+              items: const [
+                DropdownMenuItem(value: 'inherit', child: Text('Hériter')),
+                DropdownMenuItem(value: 'start', child: Text('Gauche')),
+                DropdownMenuItem(value: 'center', child: Text('Centre')),
+                DropdownMenuItem(value: 'end', child: Text('Droite')),
+              ],
+              onChanged: (value) {
+                if (value == null) {
+                  return;
+                }
+                onUpdateProperty('responsiveAlign', value);
               },
             ),
             const _SectionTitle(title: 'Effets'),

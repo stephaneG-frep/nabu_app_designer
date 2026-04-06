@@ -47,7 +47,7 @@ class ComponentRenderer extends StatelessWidget {
     final lineHeight = ((props['lineHeight'] as num?) ?? 1.2).toDouble();
     final padding = ((props['padding'] as num?) ?? 12).toDouble();
     final borderRadius = ((props['borderRadius'] as num?) ?? 12).toDouble();
-    final width = ((props['width'] as num?) ?? 220).toDouble();
+    var width = ((props['width'] as num?) ?? 220).toDouble();
     final height = ((props['height'] as num?) ?? 60).toDouble();
     final margin = ((props['margin'] as num?) ?? 0).toDouble();
     final visible = (props['visible'] as bool?) ?? true;
@@ -63,11 +63,36 @@ class ComponentRenderer extends StatelessWidget {
     final alignment = _parseAlignment(
       (props['alignment'] as String?) ?? 'center',
     );
+    final responsiveVisibility =
+        (props['responsiveVisibility'] as String?) ?? 'all';
+    final responsiveWidthMode =
+        (props['responsiveWidthMode'] as String?) ?? 'fixed';
+    final responsiveAlign = (props['responsiveAlign'] as String?) ?? 'inherit';
     final imagePath = (props['imagePath'] as String?) ?? '';
+    final screenWidth = MediaQuery.sizeOf(context).width;
+    final isMobile = screenWidth <= 430;
 
     if (!visible) {
       return const SizedBox.shrink();
     }
+
+    if (responsiveVisibility == 'mobileOnly' && !isMobile) {
+      return const SizedBox.shrink();
+    }
+    if (responsiveVisibility == 'desktopOnly' && isMobile) {
+      return const SizedBox.shrink();
+    }
+
+    final availableWidth = (screenWidth - 72).clamp(60.0, 900.0);
+    if (responsiveWidthMode == 'fill') {
+      width = availableWidth.toDouble();
+    } else {
+      width = width.clamp(16, availableWidth);
+    }
+
+    final effectiveAlignment = responsiveAlign == 'inherit'
+        ? alignment
+        : _parseAlignment(responsiveAlign);
 
     final commonTextStyle = TextStyle(
       color: color,
@@ -100,7 +125,7 @@ class ComponentRenderer extends StatelessWidget {
     );
 
     final visual = Align(
-      alignment: alignment,
+      alignment: effectiveAlignment,
       child: AnimatedOpacity(
         duration: const Duration(milliseconds: 120),
         opacity: opacity.clamp(0.2, 1.0),

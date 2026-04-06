@@ -1,11 +1,25 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../models/component_type.dart';
+import '../models/component_template_model.dart';
 
 class AddComponentSheet extends StatelessWidget {
-  const AddComponentSheet({super.key, required this.onSelected});
+  const AddComponentSheet({
+    super.key,
+    required this.onSelected,
+    this.templates = const [],
+    this.onSelectedTemplate,
+    this.onDeleteTemplate,
+  });
 
   final ValueChanged<ComponentType> onSelected;
+  final List<ComponentTemplateModel> templates;
+  final FutureOr<void> Function(ComponentTemplateModel template)?
+  onSelectedTemplate;
+  final FutureOr<void> Function(ComponentTemplateModel template)?
+  onDeleteTemplate;
 
   @override
   Widget build(BuildContext context) {
@@ -60,24 +74,83 @@ class AddComponentSheet extends StatelessWidget {
               Expanded(
                 child: ListView(
                   shrinkWrap: true,
-                  children: entries
-                      .map(
-                        (item) => ListTile(
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(10, 0, 10, 8),
+                      child: Text(
+                        'Mes templates',
+                        style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                    if (templates.isEmpty)
+                      const ListTile(
+                        contentPadding: EdgeInsets.symmetric(horizontal: 10),
+                        leading: Icon(Icons.info_outline_rounded),
+                        title: Text('Aucun template enregistré'),
+                        subtitle: Text(
+                          'Sélectionne des éléments puis menu > Enregistrer en template.',
+                        ),
+                      )
+                    else
+                      ...templates.map(
+                        (template) => ListTile(
                           contentPadding: const EdgeInsets.symmetric(
                             horizontal: 10,
                           ),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),
                           ),
-                          leading: Icon(item.$2),
-                          title: Text(item.$1.label),
+                          leading: const Icon(Icons.bookmarks_outlined),
+                          title: Text(template.name),
+                          subtitle: Text(
+                            '${template.components.length} élément(s)',
+                          ),
+                          trailing: onDeleteTemplate == null
+                              ? null
+                              : IconButton(
+                                  tooltip: 'Supprimer template',
+                                  onPressed: () async {
+                                    await onDeleteTemplate!(template);
+                                  },
+                                  icon: const Icon(
+                                    Icons.delete_outline_rounded,
+                                  ),
+                                ),
                           onTap: () {
-                            onSelected(item.$1);
+                            onSelectedTemplate?.call(template);
                             Navigator.of(context).pop();
                           },
                         ),
-                      )
-                      .toList(),
+                      ),
+                    const Divider(height: 20),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(10, 0, 10, 8),
+                      child: Text(
+                        'Composants standards',
+                        style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                    ...entries.map(
+                      (item) => ListTile(
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        leading: Icon(item.$2),
+                        title: Text(item.$1.label),
+                        onTap: () {
+                          onSelected(item.$1);
+                          Navigator.of(context).pop();
+                        },
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],

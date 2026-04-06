@@ -40,6 +40,8 @@ class DevicePreview extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final bgColor = Color(screen?.backgroundColor ?? 0xFFFFFFFF);
+    final isLandscape =
+        MediaQuery.of(context).orientation == Orientation.landscape;
 
     if (!showDeviceFrame) {
       return Container(
@@ -50,8 +52,39 @@ class DevicePreview extends StatelessWidget {
       );
     }
 
+    final effectiveMaxWidth = isLandscape ? frameMaxWidth * 1.8 : frameMaxWidth;
+
+    final shell = Container(
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(28),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(28),
+        child: Column(
+          children: [
+            Container(
+              height: 30,
+              width: double.infinity,
+              color: const Color(0xFFF2F5FA),
+              alignment: Alignment.center,
+              child: Container(
+                width: 90,
+                height: 6,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFCCD6E0),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+              ),
+            ),
+            Expanded(child: _buildCanvas(context)),
+          ],
+        ),
+      ),
+    );
+
     return Container(
-      constraints: BoxConstraints(maxWidth: frameMaxWidth),
+      constraints: BoxConstraints(maxWidth: effectiveMaxWidth),
       decoration: BoxDecoration(
         color: const Color(0xFF0F172A),
         borderRadius: BorderRadius.circular(36),
@@ -64,34 +97,9 @@ class DevicePreview extends StatelessWidget {
         ],
       ),
       padding: const EdgeInsets.all(10),
-      child: Container(
-        decoration: BoxDecoration(
-          color: bgColor,
-          borderRadius: BorderRadius.circular(28),
-        ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(28),
-          child: Column(
-            children: [
-              Container(
-                height: 30,
-                width: double.infinity,
-                color: const Color(0xFFF2F5FA),
-                alignment: Alignment.center,
-                child: Container(
-                  width: 90,
-                  height: 6,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFCCD6E0),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                ),
-              ),
-              Expanded(child: _buildCanvas(context)),
-            ],
-          ),
-        ),
-      ),
+      child: isLandscape
+          ? AspectRatio(aspectRatio: 19.5 / 9, child: shell)
+          : shell,
     );
   }
 
@@ -100,11 +108,27 @@ class DevicePreview extends StatelessWidget {
       return const Center(child: Text('Aucun écran sélectionné'));
     }
 
+    final components = screen!.components;
+    final byId = {for (final c in components) c.id: c};
+    final childrenByParent = <String, List<UIComponentModel>>{};
+    final roots = <UIComponentModel>[];
+
+    for (final component in components) {
+      final parentId = (component.properties['parentId'] as String?) ?? '';
+      if (parentId.isEmpty || !byId.containsKey(parentId)) {
+        roots.add(component);
+      } else {
+        childrenByParent
+            .putIfAbsent(parentId, () => <UIComponentModel>[])
+            .add(component);
+      }
+    }
+
     final rows = <String>[];
     final grouped = <String, List<UIComponentModel>>{};
 
-    for (var i = 0; i < screen!.components.length; i++) {
-      final component = screen!.components[i];
+    for (var i = 0; i < roots.length; i++) {
+      final component = roots[i];
       final row = ((component.properties['row'] as num?) ?? -1).round();
       final key = row >= 0 ? 'row_$row' : 'single_${component.id}_$i';
       if (!grouped.containsKey(key)) {
@@ -126,7 +150,10 @@ class DevicePreview extends StatelessWidget {
             final component = rowComponents.first;
             return Padding(
               padding: const EdgeInsets.only(bottom: 12),
-              child: _buildSlot(component),
+              child: _buildTreeNode(
+                component,
+                childrenByParent: childrenByParent,
+              ),
             );
           }
 
@@ -141,7 +168,10 @@ class DevicePreview extends StatelessWidget {
                       .map(
                         (component) => Padding(
                           padding: const EdgeInsets.only(right: 8),
-                          child: _buildSlot(component),
+                          child: _buildTreeNode(
+                            component,
+                            childrenByParent: childrenByParent,
+                          ),
                         ),
                       )
                       .toList(),
@@ -176,10 +206,54 @@ class DevicePreview extends StatelessWidget {
     );
   }
 
-  Widget _buildSlot(UIComponentModel component) {
+  Widget _buildTreeNode(
+    UIComponentModel component, {
+    required Map<String, List<UIComponentModel>> childrenByParent,
+    int depth = 0,
+    Set<String>? ancestry,
+  }) {
+    final path = {...?ancestry, component.id};
+    final children =
+        childrenByParent[component.id] ?? const <UIComponentModel>[];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildSlot(component, allowDrag: depth == 0),
+        if (children.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(left: 14, top: 6),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: children
+                  .map(
+                    (child) => Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: path.contains(child.id)
+                          ? const Text('Cycle parent/enfant détecté')
+                          : _buildTreeNode(
+                              child,
+                              childrenByParent: childrenByParent,
+                              depth: depth + 1,
+                              ancestry: path,
+                            ),
+                    ),
+                  )
+                  .toList(),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildSlot(UIComponentModel component, {required bool allowDrag}) {
     return _DraggableComponentSlot(
       componentId: component.id,
-      enabled: dragEnabled && selectionMode && onMoveComponentBefore != null,
+      enabled:
+          allowDrag &&
+          dragEnabled &&
+          selectionMode &&
+          onMoveComponentBefore != null,
       onDroppedBefore: (draggedId, targetId) async {
         await onMoveComponentBefore?.call(draggedId, targetId);
       },

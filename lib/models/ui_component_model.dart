@@ -281,6 +281,11 @@ class UIComponentModel {
       'progress': 0.6,
       'alignment': 'center',
       'row': -1,
+      'groupId': '',
+      'parentId': '',
+      'responsiveVisibility': 'all',
+      'responsiveWidthMode': 'fixed',
+      'responsiveAlign': 'inherit',
       'locked': false,
       'actionType': 'none',
       'targetScreenId': '',
@@ -310,12 +315,18 @@ class UIComponentModel {
   }
 
   factory UIComponentModel.fromJson(Map<String, dynamic> json) {
+    final rawProperties = Map<String, dynamic>.from(
+      (json['properties'] as Map?) ?? <String, dynamic>{},
+    );
+    rawProperties.putIfAbsent('groupId', () => '');
+    rawProperties.putIfAbsent('parentId', () => '');
+    rawProperties.putIfAbsent('responsiveVisibility', () => 'all');
+    rawProperties.putIfAbsent('responsiveWidthMode', () => 'fixed');
+    rawProperties.putIfAbsent('responsiveAlign', () => 'inherit');
     return UIComponentModel(
       id: json['id'] as String,
       type: ComponentTypeX.fromValue(json['type'] as String? ?? ''),
-      properties: Map<String, dynamic>.from(
-        (json['properties'] as Map?) ?? <String, dynamic>{},
-      ),
+      properties: rawProperties,
     );
   }
 }

@@ -41,7 +41,9 @@ class _LayersPanelState extends State<LayersPanel> {
 
   @override
   Widget build(BuildContext context) {
-    final filtered = widget.components.where((component) {
+    final treeEntries = _buildTreeEntries(widget.components);
+    final filtered = treeEntries.where((entry) {
+      final component = entry.component;
       final label = ((component.properties['text'] as String?) ?? '')
           .trim()
           .toLowerCase();
@@ -161,11 +163,14 @@ class _LayersPanelState extends State<LayersPanel> {
                   itemCount: reversedFiltered.length,
                   separatorBuilder: (_, _) => const SizedBox(height: 4),
                   itemBuilder: (context, index) {
-                    final component = reversedFiltered[index];
+                    final entry = reversedFiltered[index];
+                    final component = entry.component;
                     final selected = widget.selectedIds.contains(component.id);
                     final locked = widget.isLocked(component.id);
                     final visible =
                         (component.properties['visible'] as bool?) ?? true;
+                    final groupId =
+                        (component.properties['groupId'] as String?) ?? '';
                     final label =
                         (component.properties['text'] as String?)?.trim() ?? '';
                     return InkWell(
@@ -188,15 +193,28 @@ class _LayersPanelState extends State<LayersPanel> {
                             Icon(_iconForType(component.type.name), size: 18),
                             const SizedBox(width: 8),
                             Expanded(
-                              child: Text(
-                                label.isEmpty
-                                    ? component.type.name
-                                    : '${component.type.name}: $label',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: Theme.of(context).textTheme.bodySmall,
+                              child: Padding(
+                                padding: EdgeInsets.only(
+                                  left: (entry.depth * 12).toDouble(),
+                                ),
+                                child: Text(
+                                  label.isEmpty
+                                      ? component.type.name
+                                      : '${component.type.name}: $label',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: Theme.of(context).textTheme.bodySmall,
+                                ),
                               ),
                             ),
+                            if (groupId.isNotEmpty)
+                              const Padding(
+                                padding: EdgeInsets.only(right: 2),
+                                child: Icon(
+                                  Icons.group_work_outlined,
+                                  size: 16,
+                                ),
+                              ),
                             IconButton(
                               visualDensity: VisualDensity.compact,
                               tooltip: visible ? 'Masquer' : 'Afficher',
@@ -236,6 +254,42 @@ class _LayersPanelState extends State<LayersPanel> {
     );
   }
 
+  List<_LayerEntry> _buildTreeEntries(List<UIComponentModel> components) {
+    final byId = {for (final c in components) c.id: c};
+    final childrenByParent = <String, List<UIComponentModel>>{};
+    final roots = <UIComponentModel>[];
+
+    for (final component in components) {
+      final parentId = (component.properties['parentId'] as String?) ?? '';
+      if (parentId.isEmpty || !byId.containsKey(parentId)) {
+        roots.add(component);
+      } else {
+        childrenByParent
+            .putIfAbsent(parentId, () => <UIComponentModel>[])
+            .add(component);
+      }
+    }
+
+    final entries = <_LayerEntry>[];
+
+    void visit(UIComponentModel component, int depth, Set<String> ancestry) {
+      entries.add(_LayerEntry(component: component, depth: depth));
+      final nextAncestry = {...ancestry, component.id};
+      for (final child
+          in childrenByParent[component.id] ?? const <UIComponentModel>[]) {
+        if (nextAncestry.contains(child.id)) {
+          continue;
+        }
+        visit(child, depth + 1, nextAncestry);
+      }
+    }
+
+    for (final root in roots) {
+      visit(root, 0, const <String>{});
+    }
+    return entries;
+  }
+
   IconData _iconForType(String typeName) {
     if (typeName.contains('button')) return Icons.smart_button_outlined;
     if (typeName.contains('text')) return Icons.text_fields_rounded;
@@ -244,4 +298,11 @@ class _LayersPanelState extends State<LayersPanel> {
     if (typeName.contains('icon')) return Icons.star_outline_rounded;
     return Icons.widgets_outlined;
   }
+}
+
+class _LayerEntry {
+  const _LayerEntry({required this.component, required this.depth});
+
+  final UIComponentModel component;
+  final int depth;
 }

@@ -56,6 +56,29 @@ class ProjectFileService {
     required ProjectModel project,
     required Map<String, String> generatedFiles,
   }) async {
+    return _exportGeneratedFlutterZip(
+      project: project,
+      generatedFiles: generatedFiles,
+      flavor: 'flutter_v2',
+    );
+  }
+
+  Future<String> exportFlutterProZip({
+    required ProjectModel project,
+    required Map<String, String> generatedFiles,
+  }) async {
+    return _exportGeneratedFlutterZip(
+      project: project,
+      generatedFiles: generatedFiles,
+      flavor: 'flutter_pro',
+    );
+  }
+
+  Future<String> _exportGeneratedFlutterZip({
+    required ProjectModel project,
+    required Map<String, String> generatedFiles,
+    required String flavor,
+  }) async {
     final root = await getApplicationDocumentsDirectory();
     final exportsDir = Directory('${root.path}/exports');
     if (!exportsDir.existsSync()) {
@@ -68,7 +91,7 @@ class ProjectFileService {
         .replaceAll(':', '-')
         .replaceAll('.', '-');
     final filename =
-        '${safeName.isEmpty ? 'project' : safeName}_flutter_v2_$timestamp.zip';
+        '${safeName.isEmpty ? 'project' : safeName}_${flavor}_$timestamp.zip';
     final file = File('${exportsDir.path}/$filename');
 
     final archive = Archive();

@@ -13,6 +13,123 @@ class FlutterCodeGenerator {
         .join('\n\n');
   }
 
+  String generateProjectBundlePro(ProjectModel project) {
+    final files = generateProjectFilesPro(project);
+    final ordered = files.entries.toList()
+      ..sort((a, b) => a.key.compareTo(b.key));
+    return ordered
+        .map((entry) => '=== ${entry.key} ===\n${entry.value}')
+        .join('\n\n');
+  }
+
+  Map<String, String> generateProjectFilesPro(ProjectModel project) {
+    if (project.screens.isEmpty) {
+      return {'lib/main.dart': _emptyProjectTemplate(project.name)};
+    }
+
+    final classByScreenId = <String, String>{};
+    final routeByScreenId = <String, String>{};
+    final screenImportByScreenId = <String, String>{};
+
+    for (var i = 0; i < project.screens.length; i++) {
+      final screen = project.screens[i];
+      final fileBase = '${_toSnakeCase(screen.name)}_${i + 1}';
+      final className = '${_toPascalCase(screen.name)}Screen${i + 1}';
+      final route = '/$fileBase';
+      classByScreenId[screen.id] = className;
+      routeByScreenId[screen.id] = route;
+      screenImportByScreenId[screen.id] = "import '../screens/$fileBase.dart';";
+    }
+
+    final files = <String, String>{};
+
+    for (var i = 0; i < project.screens.length; i++) {
+      final screen = project.screens[i];
+      final className = classByScreenId[screen.id]!;
+      final fileName = 'lib/screens/${_toSnakeCase(screen.name)}_${i + 1}.dart';
+      files[fileName] =
+          "import 'package:flutter/material.dart';\n\n${_generateScreenClass(screen: screen, className: className, routeByScreenId: routeByScreenId)}";
+    }
+
+    final screenImports = project.screens
+        .map((screen) => screenImportByScreenId[screen.id]!)
+        .join('\n');
+    final routes = project.screens
+        .map(
+          (screen) =>
+              "    '${routeByScreenId[screen.id]!}': (_) => const ${classByScreenId[screen.id]!}(),",
+        )
+        .join('\n');
+    final initialRoute = routeByScreenId[project.screens.first.id]!;
+
+    files['lib/main.dart'] = '''
+import 'app/app.dart';
+
+void main() {
+  runApp(const GeneratedApp());
+}
+''';
+
+    files['lib/app/app.dart'] =
+        '''
+import 'package:flutter/material.dart';
+
+import '../router/app_router.dart';
+import '../theme/app_theme.dart';
+
+class GeneratedApp extends StatelessWidget {
+  const GeneratedApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      title: '${_escape(project.name)}',
+      theme: AppTheme.light,
+      initialRoute: AppRouter.initialRoute,
+      routes: AppRouter.routes,
+    );
+  }
+}
+''';
+
+    files['lib/theme/app_theme.dart'] = '''
+import 'package:flutter/material.dart';
+
+class AppTheme {
+  static ThemeData get light {
+    final scheme = ColorScheme.fromSeed(seedColor: const Color(0xFF2A9D8F));
+    return ThemeData(
+      colorScheme: scheme,
+      useMaterial3: true,
+      scaffoldBackgroundColor: const Color(0xFFF8FAFC),
+      appBarTheme: const AppBarTheme(centerTitle: false),
+      inputDecorationTheme: const InputDecorationTheme(
+        border: OutlineInputBorder(),
+      ),
+    );
+  }
+}
+''';
+
+    files['lib/router/app_router.dart'] =
+        '''
+import 'package:flutter/material.dart';
+
+$screenImports
+
+class AppRouter {
+  static const String initialRoute = '$initialRoute';
+
+  static final Map<String, WidgetBuilder> routes = {
+$routes
+  };
+}
+''';
+
+    return files;
+  }
+
   Map<String, String> generateProjectFilesV2(ProjectModel project) {
     if (project.screens.isEmpty) {
       return {'lib/main.dart': _emptyProjectTemplate(project.name)};
@@ -37,13 +154,18 @@ class FlutterCodeGenerator {
       final screen = project.screens[i];
       final className = classByScreenId[screen.id]!;
       final fileName = 'lib/screens/${_toSnakeCase(screen.name)}_${i + 1}.dart';
-      screenImports.add("import 'screens/${_toSnakeCase(screen.name)}_${i + 1}.dart';");
-      routes.add("        '${routeByScreenId[screen.id]!}': (_) => const $className(),");
+      screenImports.add(
+        "import 'screens/${_toSnakeCase(screen.name)}_${i + 1}.dart';",
+      );
+      routes.add(
+        "        '${routeByScreenId[screen.id]!}': (_) => const $className(),",
+      );
       files[fileName] =
           "import 'package:flutter/material.dart';\n\n${_generateScreenClass(screen: screen, className: className, routeByScreenId: routeByScreenId)}";
     }
 
-    files['lib/main.dart'] = '''
+    files['lib/main.dart'] =
+        '''
 import 'package:flutter/material.dart';
 ${screenImports.join('\n')}
 

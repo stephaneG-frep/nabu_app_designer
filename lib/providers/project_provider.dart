@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 
 import '../models/component_type.dart';
+import '../models/component_template_model.dart';
 import '../models/history_timeline_entry.dart';
 import '../models/project_model.dart';
 import '../models/screen_model.dart';
@@ -18,6 +19,8 @@ class ProjectProvider extends ChangeNotifier {
   final LocalStorageService _storageService;
 
   final List<ProjectModel> _projects = <ProjectModel>[];
+  final List<ComponentTemplateModel> _componentTemplates =
+      <ComponentTemplateModel>[];
   bool _isLoading = true;
 
   String? _activeProjectId;
@@ -31,13 +34,17 @@ class ProjectProvider extends ChangeNotifier {
   String? _lastSaveError;
   DateTime? _lastSavedAt;
   String _pendingHistoryLabel = 'Modification';
+  final List<UIComponentModel> _clipboardComponents = <UIComponentModel>[];
 
   final List<_HistoryEntry> _history = <_HistoryEntry>[];
   int _historyIndex = -1;
   bool _isRestoringHistory = false;
+  static const int _maxHistoryEntries = 300;
 
   bool get isLoading => _isLoading;
   List<ProjectModel> get projects => List<ProjectModel>.unmodifiable(_projects);
+  List<ComponentTemplateModel> get componentTemplates =>
+      List<ComponentTemplateModel>.unmodifiable(_componentTemplates);
 
   String? get activeProjectId => _activeProjectId;
   String? get activeScreenId => _activeScreenId;
@@ -49,6 +56,72 @@ class ProjectProvider extends ChangeNotifier {
 
   bool get canUndo => _historyIndex > 0;
   bool get canRedo => _historyIndex >= 0 && _historyIndex < _history.length - 1;
+  int get historyEntryCount => _history.length;
+  bool get hasClipboard => _clipboardComponents.isNotEmpty;
+  bool get canGroupSelection => _selectedComponentIds.length >= 2;
+  bool get canUngroupSelection {
+    final screen = activeScreen;
+    if (screen == null || _selectedComponentIds.isEmpty) {
+      return false;
+    }
+    final selectedSet = _selectedComponentIds.toSet();
+    return screen.components.any((component) {
+      if (!selectedSet.contains(component.id)) {
+        return false;
+      }
+      return _groupIdOf(component).isNotEmpty;
+    });
+  }
+
+  bool get canSelectGroupOfSelection {
+    final screen = activeScreen;
+    final component = selectedComponent;
+    if (screen == null || component == null) {
+      return false;
+    }
+    final groupId = _groupIdOf(component);
+    if (groupId.isEmpty) {
+      return false;
+    }
+    final count = screen.components
+        .where((item) => _groupIdOf(item) == groupId)
+        .length;
+    return count > 1;
+  }
+
+  bool get canNestSelection {
+    final screen = activeScreen;
+    final parent = selectedComponent;
+    if (screen == null || parent == null || _selectedComponentIds.length < 2) {
+      return false;
+    }
+    if (!_canHostChildren(parent.type)) {
+      return false;
+    }
+    final selectedSet = _selectedComponentIds.toSet();
+    final movableChildren = screen.components.where((component) {
+      if (!selectedSet.contains(component.id) || component.id == parent.id) {
+        return false;
+      }
+      return !_isLocked(component);
+    }).toList();
+    return movableChildren.isNotEmpty;
+  }
+
+  bool get canDetachFromParent {
+    final screen = activeScreen;
+    if (screen == null || _selectedComponentIds.isEmpty) {
+      return false;
+    }
+    final selectedSet = _selectedComponentIds.toSet();
+    return screen.components.any((component) {
+      if (!selectedSet.contains(component.id)) {
+        return false;
+      }
+      return _parentIdOf(component).isNotEmpty;
+    });
+  }
+
   bool get isSaving => _isSaving;
   bool get hasPendingSave => _hasPendingSave;
   String? get lastSaveError => _lastSaveError;
@@ -111,11 +184,19 @@ class ProjectProvider extends ChangeNotifier {
     notifyListeners();
 
     final loaded = _storageService.loadProjects();
+    final loadedTemplates = _storageService.loadComponentTemplates();
+    final loadedHistoryState = _storageService.loadHistoryState();
     _projects
       ..clear()
       ..addAll(loaded);
+    _componentTemplates
+      ..clear()
+      ..addAll(loadedTemplates);
 
-    _resetHistory();
+    final restoredHistory = _restoreHistoryState(loadedHistoryState);
+    if (!restoredHistory) {
+      _resetHistory();
+    }
     _isLoading = false;
     notifyListeners();
   }
@@ -386,6 +467,20 @@ class ProjectProvider extends ChangeNotifier {
     if (selected != null) {
       final selectedRow = ((selected.properties['row'] as num?) ?? -1).round();
       component = component.updateProperty('row', selectedRow);
+      if (type != ComponentType.appBar) {
+        if (_canHostChildren(selected.type)) {
+          component = component
+              .updateProperty('parentId', selected.id)
+              .updateProperty('row', -1);
+        } else {
+          final selectedParentId = _parentIdOf(selected);
+          if (selectedParentId.isNotEmpty) {
+            component = component
+                .updateProperty('parentId', selectedParentId)
+                .updateProperty('row', -1);
+          }
+        }
+      }
     }
 
     final updatedComponents = type == ComponentType.appBar
@@ -403,6 +498,120 @@ class ProjectProvider extends ChangeNotifier {
     _schedulePersist(pushHistory: true, historyLabel: 'Ajout composant');
   }
 
+  Future<bool> saveSelectionAsComponentTemplate(String name) async {
+    final screen = activeScreen;
+    final trimmed = name.trim();
+    if (screen == null || _selectedComponentIds.isEmpty || trimmed.isEmpty) {
+      return false;
+    }
+
+    var selection = _expandedSelectionWithGroups(
+      screen,
+      _selectedComponentIds.toSet(),
+    );
+    selection = _expandedSelectionWithDescendants(screen, selection);
+
+    final components = screen.components
+        .where((component) => selection.contains(component.id))
+        .map(
+          (component) => component.copyWith(
+            properties: Map<String, dynamic>.from(component.properties),
+          ),
+        )
+        .toList();
+    if (components.isEmpty && selectedComponent != null) {
+      components.add(
+        selectedComponent!.copyWith(
+          properties: Map<String, dynamic>.from(selectedComponent!.properties),
+        ),
+      );
+    }
+    if (components.isEmpty) {
+      return false;
+    }
+
+    final template = ComponentTemplateModel(
+      id: IdGenerator.next('template'),
+      name: trimmed,
+      createdAt: DateTime.now(),
+      components: components,
+    );
+    _componentTemplates.insert(0, template);
+    notifyListeners();
+    await _persistTemplatesNow();
+    return true;
+  }
+
+  Future<bool> insertComponentTemplate(String templateId) async {
+    final screen = activeScreen;
+    if (screen == null) {
+      return false;
+    }
+    final template = _componentTemplates
+        .where((item) => item.id == templateId)
+        .firstOrNull;
+    if (template == null || template.components.isEmpty) {
+      return false;
+    }
+
+    final updatedComponents = [...screen.components];
+    final selectedId = selectedComponentId;
+    final selectedIndex = selectedId == null
+        ? -1
+        : updatedComponents.indexWhere((item) => item.id == selectedId);
+    var insertIndex = selectedIndex == -1
+        ? updatedComponents.length
+        : selectedIndex + 1;
+
+    final idMap = <String, String>{};
+    final groupMap = <String, String>{};
+    for (final component in template.components) {
+      idMap[component.id] = IdGenerator.next('component');
+    }
+
+    final insertedIds = <String>[];
+    for (final component in template.components) {
+      final props = Map<String, dynamic>.from(component.properties);
+      final sourceGroupId = (props['groupId'] as String?) ?? '';
+      if (sourceGroupId.isNotEmpty) {
+        props['groupId'] = groupMap.putIfAbsent(
+          sourceGroupId,
+          () => IdGenerator.next('group'),
+        );
+      }
+      final sourceParentId = (props['parentId'] as String?) ?? '';
+      props['parentId'] = idMap[sourceParentId] ?? '';
+      props['text'] = _copyText(props['text'] as String?);
+
+      final inserted = component.copyWith(
+        id: idMap[component.id],
+        properties: props,
+      );
+      updatedComponents.insert(insertIndex, inserted);
+      insertedIds.add(inserted.id);
+      insertIndex += 1;
+    }
+
+    _replaceScreen(screen.copyWith(components: updatedComponents));
+    _selectedComponentIds
+      ..clear()
+      ..addAll(insertedIds);
+    notifyListeners();
+    _schedulePersist(pushHistory: true, historyLabel: 'Insertion template');
+    return true;
+  }
+
+  Future<bool> deleteComponentTemplate(String templateId) async {
+    final before = _componentTemplates.length;
+    _componentTemplates.removeWhere((item) => item.id == templateId);
+    if (_componentTemplates.length == before) {
+      return false;
+    }
+    notifyListeners();
+    await _persistTemplatesNow();
+    return true;
+  }
+
   Future<void> duplicateSelectedComponent() async {
     final screen = activeScreen;
     if (screen == null || _selectedComponentIds.isEmpty) {
@@ -412,16 +621,25 @@ class ProjectProvider extends ChangeNotifier {
     final selectedIds = _selectedComponentIds.toSet();
     final updatedComponents = <UIComponentModel>[];
     final duplicatedIds = <String>[];
+    final duplicatedGroupIds = <String, String>{};
 
     for (final component in screen.components) {
       updatedComponents.add(component);
       if (!selectedIds.contains(component.id) || _isLocked(component)) {
         continue;
       }
+      final clonedProperties = Map<String, dynamic>.from(component.properties)
+        ..['text'] = _copyText(component.properties['text'] as String?);
+      final sourceGroupId = _groupIdOf(component);
+      if (sourceGroupId.isNotEmpty) {
+        clonedProperties['groupId'] = duplicatedGroupIds.putIfAbsent(
+          sourceGroupId,
+          () => IdGenerator.next('group'),
+        );
+      }
       final cloned = component.copyWith(
         id: IdGenerator.next('component'),
-        properties: Map<String, dynamic>.from(component.properties)
-          ..['text'] = _copyText(component.properties['text'] as String?),
+        properties: clonedProperties,
       );
       updatedComponents.add(cloned);
       duplicatedIds.add(cloned.id);
@@ -479,30 +697,30 @@ class ProjectProvider extends ChangeNotifier {
     }
 
     final selectedSet = _selectedComponentIds.toSet();
-    final lockedIds = screen.components
-        .where((c) => selectedSet.contains(c.id) && _isLocked(c))
-        .map((c) => c.id)
-        .toSet();
-    final updatedComponents = screen.components
-        .where((component) => !selectedSet.contains(component.id))
-        .toList();
+    final expandedSet = _expandedSelectionWithDescendants(screen, selectedSet);
+    final byId = {for (final c in screen.components) c.id: c};
+    final keptFromSelection = <String>{};
+    final updatedComponents = <UIComponentModel>[];
 
-    if (lockedIds.isNotEmpty) {
-      updatedComponents.addAll(
-        screen.components.where((c) => lockedIds.contains(c.id)),
-      );
-      updatedComponents.sort(
-        (a, b) => screen.components
-            .indexOf(a)
-            .compareTo(screen.components.indexOf(b)),
-      );
+    for (final component in screen.components) {
+      if (!expandedSet.contains(component.id)) {
+        updatedComponents.add(component);
+        continue;
+      }
+      final keepLocked =
+          _isLocked(component) ||
+          _hasLockedAncestorInSet(component, expandedSet, byId);
+      if (keepLocked) {
+        updatedComponents.add(component);
+        keptFromSelection.add(component.id);
+      }
     }
 
     final updatedScreen = screen.copyWith(components: updatedComponents);
     _replaceScreen(updatedScreen);
     _selectedComponentIds
       ..clear()
-      ..addAll(lockedIds);
+      ..addAll(keptFromSelection);
 
     notifyListeners();
     _schedulePersist(pushHistory: true, historyLabel: 'Suppression composant');
@@ -630,6 +848,255 @@ class ProjectProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<bool> nestSelectedUnderCurrent() async {
+    final screen = activeScreen;
+    final parent = selectedComponent;
+    if (screen == null || parent == null || _selectedComponentIds.length < 2) {
+      return false;
+    }
+    if (!_canHostChildren(parent.type)) {
+      return false;
+    }
+
+    final selectedSet = _selectedComponentIds.toSet();
+    final byId = {for (final c in screen.components) c.id: c};
+    final parentAncestors = _ancestorIds(parent.id, byId);
+    final mutableIds = screen.components
+        .where((component) => selectedSet.contains(component.id))
+        .where((component) => component.id != parent.id)
+        .where((component) => !_isLocked(component))
+        .where((component) => !parentAncestors.contains(component.id))
+        .map((component) => component.id)
+        .toSet();
+
+    if (mutableIds.isEmpty) {
+      return false;
+    }
+
+    final updatedComponents = screen.components.map((component) {
+      if (!mutableIds.contains(component.id)) {
+        return component;
+      }
+      return component
+          .updateProperty('parentId', parent.id)
+          .updateProperty('row', -1);
+    }).toList();
+
+    _replaceScreen(screen.copyWith(components: updatedComponents));
+    _selectedComponentIds
+      ..clear()
+      ..add(parent.id)
+      ..addAll(mutableIds);
+    notifyListeners();
+    _schedulePersist(pushHistory: true, historyLabel: 'Imbrication');
+    return true;
+  }
+
+  Future<bool> detachSelectedFromParent() async {
+    final screen = activeScreen;
+    if (screen == null || _selectedComponentIds.isEmpty) {
+      return false;
+    }
+    final expandedSelection = _expandedSelectionWithGroups(
+      screen,
+      _selectedComponentIds.toSet(),
+    );
+    var changed = false;
+    final updatedComponents = screen.components.map((component) {
+      if (!expandedSelection.contains(component.id) || _isLocked(component)) {
+        return component;
+      }
+      if (_parentIdOf(component).isEmpty) {
+        return component;
+      }
+      changed = true;
+      return component.updateProperty('parentId', '');
+    }).toList();
+
+    if (!changed) {
+      return false;
+    }
+    _replaceScreen(screen.copyWith(components: updatedComponents));
+    notifyListeners();
+    _schedulePersist(pushHistory: true, historyLabel: 'Sortie du parent');
+    return true;
+  }
+
+  Future<bool> groupSelectedComponents() async {
+    final screen = activeScreen;
+    if (screen == null || _selectedComponentIds.length < 2) {
+      return false;
+    }
+    final selectedSet = _selectedComponentIds.toSet();
+    final mutableSelection = screen.components
+        .where((component) => selectedSet.contains(component.id))
+        .where((component) => !_isLocked(component))
+        .toList();
+    if (mutableSelection.length < 2) {
+      return false;
+    }
+
+    final groupId = IdGenerator.next('group');
+    final mutableIds = mutableSelection.map((item) => item.id).toSet();
+    final updatedComponents = screen.components
+        .map(
+          (component) => mutableIds.contains(component.id)
+              ? component.updateProperty('groupId', groupId)
+              : component,
+        )
+        .toList();
+
+    _replaceScreen(screen.copyWith(components: updatedComponents));
+    _selectedComponentIds
+      ..clear()
+      ..addAll(mutableSelection.map((item) => item.id));
+    notifyListeners();
+    _schedulePersist(pushHistory: true, historyLabel: 'Groupement');
+    return true;
+  }
+
+  Future<bool> ungroupSelectedComponents() async {
+    final screen = activeScreen;
+    if (screen == null || _selectedComponentIds.isEmpty) {
+      return false;
+    }
+    final expandedSelection = _expandedSelectionWithGroups(
+      screen,
+      _selectedComponentIds.toSet(),
+    );
+    var changed = false;
+    final updatedComponents = screen.components.map((component) {
+      if (!expandedSelection.contains(component.id)) {
+        return component;
+      }
+      final groupId = _groupIdOf(component);
+      if (groupId.isEmpty) {
+        return component;
+      }
+      changed = true;
+      return component.updateProperty('groupId', '');
+    }).toList();
+
+    if (!changed) {
+      return false;
+    }
+
+    _replaceScreen(screen.copyWith(components: updatedComponents));
+    notifyListeners();
+    _schedulePersist(pushHistory: true, historyLabel: 'Dégroupement');
+    return true;
+  }
+
+  bool selectGroupOfSelectedComponent() {
+    final screen = activeScreen;
+    final component = selectedComponent;
+    if (screen == null || component == null) {
+      return false;
+    }
+    final groupId = _groupIdOf(component);
+    if (groupId.isEmpty) {
+      return false;
+    }
+    final groupIds = screen.components
+        .where((item) => _groupIdOf(item) == groupId)
+        .map((item) => item.id)
+        .toList();
+    if (groupIds.length < 2) {
+      return false;
+    }
+    _selectedComponentIds
+      ..clear()
+      ..addAll(groupIds);
+    notifyListeners();
+    return true;
+  }
+
+  Future<bool> copySelectedComponents() async {
+    final screen = activeScreen;
+    if (screen == null || _selectedComponentIds.isEmpty) {
+      return false;
+    }
+    var expandedSelection = _expandedSelectionWithGroups(
+      screen,
+      _selectedComponentIds.toSet(),
+    );
+    expandedSelection = _expandedSelectionWithDescendants(
+      screen,
+      expandedSelection,
+    );
+    final copied = screen.components
+        .where((component) => expandedSelection.contains(component.id))
+        .map(
+          (component) => component.copyWith(
+            properties: Map<String, dynamic>.from(component.properties),
+          ),
+        )
+        .toList();
+
+    if (copied.isEmpty) {
+      return false;
+    }
+    _clipboardComponents
+      ..clear()
+      ..addAll(copied);
+    notifyListeners();
+    return true;
+  }
+
+  Future<bool> pasteClipboardComponents() async {
+    final screen = activeScreen;
+    if (screen == null || _clipboardComponents.isEmpty) {
+      return false;
+    }
+    final updatedComponents = [...screen.components];
+    final selectedId = selectedComponentId;
+    final selectedIndex = selectedId == null
+        ? -1
+        : updatedComponents.indexWhere(
+            (component) => component.id == selectedId,
+          );
+    var insertIndex = selectedIndex == -1
+        ? updatedComponents.length
+        : selectedIndex + 1;
+
+    final pastedIds = <String>[];
+    final pastedGroupIds = <String, String>{};
+    final pastedIdMap = <String, String>{};
+
+    for (final copied in _clipboardComponents) {
+      pastedIdMap[copied.id] = IdGenerator.next('component');
+    }
+
+    for (final copied in _clipboardComponents) {
+      final sourceProps = Map<String, dynamic>.from(copied.properties);
+      final sourceGroupId = (sourceProps['groupId'] as String?) ?? '';
+      if (sourceGroupId.isNotEmpty) {
+        sourceProps['groupId'] = pastedGroupIds.putIfAbsent(
+          sourceGroupId,
+          () => IdGenerator.next('group'),
+        );
+      }
+      final sourceParentId = (sourceProps['parentId'] as String?) ?? '';
+      sourceProps['parentId'] = pastedIdMap[sourceParentId] ?? '';
+      sourceProps['text'] = _copyText(sourceProps['text'] as String?);
+      final pasted = copied.copyWith(
+        id: pastedIdMap[copied.id],
+        properties: sourceProps,
+      );
+      updatedComponents.insert(insertIndex, pasted);
+      pastedIds.add(pasted.id);
+      insertIndex += 1;
+    }
+
+    _replaceScreen(screen.copyWith(components: updatedComponents));
+    _selectedComponentIds
+      ..clear()
+      ..addAll(pastedIds);
+    notifyListeners();
+    _schedulePersist(pushHistory: true, historyLabel: 'Collage composants');
+    return true;
+  }
+
   Future<void> updateSelectedComponentProperty(
     String key,
     dynamic value,
@@ -706,6 +1173,7 @@ class ProjectProvider extends ChangeNotifier {
     _restoreSnapshot(_history[_historyIndex].snapshot);
     notifyListeners();
     await _persistNow();
+    await _persistHistoryNow();
   }
 
   Future<void> redo() async {
@@ -716,6 +1184,7 @@ class ProjectProvider extends ChangeNotifier {
     _restoreSnapshot(_history[_historyIndex].snapshot);
     notifyListeners();
     await _persistNow();
+    await _persistHistoryNow();
   }
 
   Future<bool> restoreHistoryAt(int index) async {
@@ -726,7 +1195,24 @@ class ProjectProvider extends ChangeNotifier {
     _restoreSnapshot(_history[_historyIndex].snapshot);
     notifyListeners();
     await _persistNow();
+    await _persistHistoryNow();
     return true;
+  }
+
+  Future<void> clearHistoryKeepingCurrent() async {
+    final currentSnapshot = _snapshotState();
+    _history
+      ..clear()
+      ..add(
+        _HistoryEntry(
+          snapshot: currentSnapshot,
+          label: 'Historique réinitialisé',
+          createdAt: DateTime.now(),
+        ),
+      );
+    _historyIndex = 0;
+    notifyListeners();
+    await _persistHistoryNow();
   }
 
   String? screenNameById(String? screenId) {
@@ -777,6 +1263,14 @@ class ProjectProvider extends ChangeNotifier {
     } finally {
       _isSaving = false;
       notifyListeners();
+    }
+  }
+
+  Future<void> _persistTemplatesNow() async {
+    try {
+      await _storageService.saveComponentTemplates(_componentTemplates);
+    } catch (_) {
+      // Keep editor flow resilient if template persistence fails.
     }
   }
 
@@ -904,6 +1398,7 @@ class ProjectProvider extends ChangeNotifier {
         ),
       );
     _historyIndex = _history.isEmpty ? -1 : 0;
+    unawaited(_persistHistoryNow());
   }
 
   void _recordHistorySnapshot({required String label}) {
@@ -929,6 +1424,7 @@ class ProjectProvider extends ChangeNotifier {
           createdAt: now,
         );
         _historyIndex = _history.length - 1;
+        unawaited(_persistHistoryNow());
         return;
       }
     }
@@ -937,6 +1433,89 @@ class ProjectProvider extends ChangeNotifier {
       _HistoryEntry(snapshot: snapshot, label: label, createdAt: now),
     );
     _historyIndex = _history.length - 1;
+    _enforceHistoryLimit();
+    unawaited(_persistHistoryNow());
+  }
+
+  void _enforceHistoryLimit() {
+    if (_history.length <= _maxHistoryEntries) {
+      return;
+    }
+    final overflow = _history.length - _maxHistoryEntries;
+    _history.removeRange(0, overflow);
+    final adjusted = _historyIndex - overflow;
+    if (_history.isEmpty) {
+      _historyIndex = -1;
+      return;
+    }
+    _historyIndex = adjusted < 0
+        ? 0
+        : (adjusted >= _history.length ? _history.length - 1 : adjusted);
+  }
+
+  Map<String, dynamic> _historyStateToJson() {
+    return <String, dynamic>{
+      'version': 1,
+      'historyIndex': _historyIndex,
+      'history': _history.map((entry) => entry.toJson()).toList(),
+    };
+  }
+
+  bool _restoreHistoryState(Map<String, dynamic>? historyState) {
+    if (historyState == null) {
+      return false;
+    }
+    try {
+      final rawHistory = historyState['history'];
+      if (rawHistory is! List || rawHistory.isEmpty) {
+        return false;
+      }
+
+      final restoredEntries = <_HistoryEntry>[];
+      for (final item in rawHistory) {
+        if (item is Map<String, dynamic>) {
+          restoredEntries.add(_HistoryEntry.fromJson(item));
+          continue;
+        }
+        if (item is Map) {
+          restoredEntries.add(
+            _HistoryEntry.fromJson(Map<String, dynamic>.from(item)),
+          );
+        }
+      }
+      if (restoredEntries.isEmpty) {
+        return false;
+      }
+
+      final rawIndex = historyState['historyIndex'];
+      var restoredIndex = rawIndex is num
+          ? rawIndex.toInt()
+          : restoredEntries.length - 1;
+      if (restoredIndex < 0 || restoredIndex >= restoredEntries.length) {
+        restoredIndex = restoredEntries.length - 1;
+      }
+
+      _history
+        ..clear()
+        ..addAll(restoredEntries);
+      _historyIndex = restoredIndex;
+      _enforceHistoryLimit();
+      if (_historyIndex < 0 || _historyIndex >= _history.length) {
+        return false;
+      }
+      _restoreSnapshot(_history[_historyIndex].snapshot);
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<void> _persistHistoryNow() async {
+    try {
+      await _storageService.saveHistoryState(_historyStateToJson());
+    } catch (_) {
+      // Keep editor flow resilient if history persistence fails.
+    }
   }
 
   String _snapshotState() {
@@ -1021,6 +1600,7 @@ class ProjectProvider extends ChangeNotifier {
   @override
   void dispose() {
     _saveDebounce?.cancel();
+    unawaited(_persistHistoryNow());
     super.dispose();
   }
 
@@ -1091,6 +1671,116 @@ class ProjectProvider extends ChangeNotifier {
     return true;
   }
 
+  String _groupIdOf(UIComponentModel component) {
+    return (component.properties['groupId'] as String?) ?? '';
+  }
+
+  String _parentIdOf(UIComponentModel component) {
+    return (component.properties['parentId'] as String?) ?? '';
+  }
+
+  Set<String> _expandedSelectionWithGroups(
+    ScreenModel screen,
+    Set<String> selection,
+  ) {
+    if (selection.isEmpty) {
+      return selection;
+    }
+    final expanded = <String>{...selection};
+    final selectedGroups = screen.components
+        .where((component) => selection.contains(component.id))
+        .map(_groupIdOf)
+        .where((groupId) => groupId.isNotEmpty)
+        .toSet();
+    if (selectedGroups.isEmpty) {
+      return expanded;
+    }
+    for (final component in screen.components) {
+      if (selectedGroups.contains(_groupIdOf(component))) {
+        expanded.add(component.id);
+      }
+    }
+    return expanded;
+  }
+
+  Set<String> _expandedSelectionWithDescendants(
+    ScreenModel screen,
+    Set<String> selection,
+  ) {
+    if (selection.isEmpty) {
+      return selection;
+    }
+    final byParent = <String, List<UIComponentModel>>{};
+    for (final component in screen.components) {
+      final parentId = _parentIdOf(component);
+      if (parentId.isEmpty) {
+        continue;
+      }
+      byParent.putIfAbsent(parentId, () => <UIComponentModel>[]).add(component);
+    }
+
+    final expanded = <String>{...selection};
+    final queue = <String>[...selection];
+    while (queue.isNotEmpty) {
+      final id = queue.removeLast();
+      for (final child in byParent[id] ?? const <UIComponentModel>[]) {
+        if (expanded.add(child.id)) {
+          queue.add(child.id);
+        }
+      }
+    }
+    return expanded;
+  }
+
+  Set<String> _ancestorIds(
+    String componentId,
+    Map<String, UIComponentModel> byId,
+  ) {
+    final result = <String>{};
+    var currentId = componentId;
+    while (true) {
+      final current = byId[currentId];
+      if (current == null) {
+        break;
+      }
+      final parentId = _parentIdOf(current);
+      if (parentId.isEmpty || result.contains(parentId)) {
+        break;
+      }
+      result.add(parentId);
+      currentId = parentId;
+    }
+    return result;
+  }
+
+  bool _hasLockedAncestorInSet(
+    UIComponentModel component,
+    Set<String> setIds,
+    Map<String, UIComponentModel> byId,
+  ) {
+    var parentId = _parentIdOf(component);
+    while (parentId.isNotEmpty) {
+      if (!setIds.contains(parentId)) {
+        return false;
+      }
+      final parent = byId[parentId];
+      if (parent == null) {
+        return false;
+      }
+      if (_isLocked(parent)) {
+        return true;
+      }
+      parentId = _parentIdOf(parent);
+    }
+    return false;
+  }
+
+  bool _canHostChildren(ComponentType type) {
+    return type == ComponentType.containerBox ||
+        type == ComponentType.card ||
+        type == ComponentType.banner;
+  }
+
   bool _isLocked(UIComponentModel component) {
     return (component.properties['locked'] as bool?) ?? false;
   }
@@ -1141,6 +1831,11 @@ class ProjectProvider extends ChangeNotifier {
         'progress': 0.6,
         'alignment': 'center',
         'row': row,
+        'groupId': '',
+        'parentId': '',
+        'responsiveVisibility': 'all',
+        'responsiveWidthMode': 'fixed',
+        'responsiveAlign': 'inherit',
         'locked': false,
         'actionType': 'none',
         'targetScreenId': '',
@@ -1308,6 +2003,37 @@ class _HistoryEntry {
   final String snapshot;
   final String label;
   final DateTime createdAt;
+
+  factory _HistoryEntry.fromJson(Map<String, dynamic> json) {
+    final snapshot = json['snapshot'] as String? ?? '';
+    if (snapshot.isEmpty) {
+      throw const FormatException('History snapshot is empty');
+    }
+
+    final rawLabel = (json['label'] as String?)?.trim() ?? '';
+    final label = rawLabel.isEmpty ? 'Modification' : rawLabel;
+    final rawCreatedAt = json['createdAt'];
+    DateTime createdAt = DateTime.now();
+    if (rawCreatedAt is String) {
+      createdAt = DateTime.tryParse(rawCreatedAt) ?? createdAt;
+    } else if (rawCreatedAt is int) {
+      createdAt = DateTime.fromMillisecondsSinceEpoch(rawCreatedAt);
+    }
+
+    return _HistoryEntry(
+      snapshot: snapshot,
+      label: label,
+      createdAt: createdAt,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return <String, dynamic>{
+      'snapshot': snapshot,
+      'label': label,
+      'createdAt': createdAt.toIso8601String(),
+    };
+  }
 
   _HistoryEntry copyWith({
     String? snapshot,

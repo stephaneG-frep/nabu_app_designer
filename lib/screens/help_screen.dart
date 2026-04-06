@@ -35,8 +35,13 @@ class _QuickGuideTab extends StatelessWidget {
       '4. Active Mode drag pour glisser-déposer.',
       '5. Active Mode grille + snap pour caler les éléments.',
       '6. Utilise Calques (recherche + filtres) pour retrouver vite un élément.',
-      '7. Exporte JSON/ZIP et partage par e-mail si besoin.',
-      '8. Ouvre la timeline pour revenir à un état précédent.',
+      '7. Groupe des éléments, copie/colle ta sélection.',
+      '8. Imbrique des composants avec parent/enfant.',
+      '9. Enregistre ta sélection en template perso.',
+      '10. Règle les contraintes responsive (visibilité, largeur, alignement).',
+      '11. Exporte JSON/ZIP et partage par e-mail si besoin.',
+      '12. Génére aussi le bundle Flutter Pro structuré.',
+      '13. Ouvre la timeline pour revenir à un état précédent, même après redémarrage.',
     ];
 
     return ListView(
@@ -106,6 +111,34 @@ class _FullGuideTab extends StatelessWidget {
         ),
         SizedBox(height: 12),
         _InfoCard(
+          title: 'Groupe Et Clipboard',
+          child: Text(
+            'Tu peux grouper/dégrouper des composants, sélectionner un groupe complet, copier une sélection puis la coller sur l’écran.',
+          ),
+        ),
+        SizedBox(height: 12),
+        _InfoCard(
+          title: 'Templates Perso',
+          child: Text(
+            'Sauvegarde une sélection en template puis réutilise-la depuis Ajouter composant. Tu peux aussi supprimer un template depuis cette feuille.',
+          ),
+        ),
+        SizedBox(height: 12),
+        _InfoCard(
+          title: 'Arbre Imbriqué',
+          child: Text(
+            'Depuis le menu actions, imbrique des éléments sous un parent (Container/Card/Banner) puis retire-les du parent si besoin.',
+          ),
+        ),
+        SizedBox(height: 12),
+        _InfoCard(
+          title: 'Responsive',
+          child: Text(
+            'Dans Propriétés > Responsive, choisis visibilité mobile/desktop, largeur fixe ou remplie, et alignement responsive.',
+          ),
+        ),
+        SizedBox(height: 12),
+        _InfoCard(
           title: 'Calques Et Lock',
           child: Text(
             'Le panneau Calques permet sélection rapide, visibilité et verrouillage.',
@@ -122,14 +155,14 @@ class _FullGuideTab extends StatelessWidget {
         _InfoCard(
           title: 'Autosave Et Timeline',
           child: Text(
-            'L’application sauvegarde automatiquement les modifications. Tu peux forcer une sauvegarde avec le bouton Sauver et restaurer un point précédent avec l’icône timeline.',
+            'L’application sauvegarde automatiquement les modifications. Tu peux forcer une sauvegarde avec le bouton Sauver et restaurer un point précédent avec l’icône timeline. L’historique est conservé au redémarrage.',
           ),
         ),
         SizedBox(height: 12),
         _InfoCard(
           title: 'Export',
           child: Text(
-            'Depuis le menu actions: export/import JSON, export fichier JSON, export ZIP Flutter V2, export par mail et génération du code Flutter.',
+            'Depuis le menu actions: export/import JSON, export ZIP V2/Pro, export par mail V2/Pro et génération de code Flutter.',
           ),
         ),
       ],

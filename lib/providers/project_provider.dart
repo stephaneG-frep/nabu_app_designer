@@ -35,6 +35,7 @@ class ProjectProvider extends ChangeNotifier {
   DateTime? _lastSavedAt;
   String _pendingHistoryLabel = 'Modification';
   final List<UIComponentModel> _clipboardComponents = <UIComponentModel>[];
+  Map<String, dynamic>? _styleClipboard;
 
   final List<_HistoryEntry> _history = <_HistoryEntry>[];
   int _historyIndex = -1;
@@ -58,6 +59,7 @@ class ProjectProvider extends ChangeNotifier {
   bool get canRedo => _historyIndex >= 0 && _historyIndex < _history.length - 1;
   int get historyEntryCount => _history.length;
   bool get hasClipboard => _clipboardComponents.isNotEmpty;
+  bool get hasStyleClipboard => _styleClipboard != null;
   bool get canGroupSelection => _selectedComponentIds.length >= 2;
   bool get canUngroupSelection {
     final screen = activeScreen;
@@ -1008,6 +1010,89 @@ class ProjectProvider extends ChangeNotifier {
       ..clear()
       ..addAll(groupIds);
     notifyListeners();
+    return true;
+  }
+
+  // ─── Presets de thème ─────────────────────────────────────────────────────
+
+  static const Map<String, Map<String, dynamic>> themePresets = {
+    'Material Teal': {
+      'color': 0xFF2A9D8F, 'backgroundColor': 0xFFE8F4F2,
+      'borderRadius': 12.0, 'elevation': 2.0, 'borderWidth': 0.0,
+    },
+    'Bleu Océan': {
+      'color': 0xFF3A86FF, 'backgroundColor': 0xFFEBF3FF,
+      'borderRadius': 16.0, 'elevation': 3.0, 'borderWidth': 0.0,
+    },
+    'Violet Pro': {
+      'color': 0xFF8338EC, 'backgroundColor': 0xFFF3EAFE,
+      'borderRadius': 8.0, 'elevation': 4.0, 'borderWidth': 0.0,
+    },
+    'Corail Warm': {
+      'color': 0xFFE76F51, 'backgroundColor': 0xFFFDF1EE,
+      'borderRadius': 20.0, 'elevation': 1.0, 'borderWidth': 0.0,
+    },
+    'Dark Mode': {
+      'color': 0xFFE2E8F0, 'backgroundColor': 0xFF1E293B,
+      'borderRadius': 12.0, 'elevation': 0.0, 'borderWidth': 1.0,
+      'borderColor': 0xFF334155,
+    },
+    'Minimaliste': {
+      'color': 0xFF212529, 'backgroundColor': 0xFFFFFFFF,
+      'borderRadius': 4.0, 'elevation': 0.0, 'borderWidth': 1.0,
+      'borderColor': 0xFFDEE2E6,
+    },
+  };
+
+  Future<void> applyThemePreset(String presetName) async {
+    final preset = themePresets[presetName];
+    if (preset == null) return;
+    final screen = activeScreen;
+    if (screen == null) return;
+    final updated = screen.components.map((c) {
+      if ((c.properties['locked'] as bool?) == true) return c;
+      return c.copyWith(
+        properties: Map<String, dynamic>.from(c.properties)..addAll(preset),
+      );
+    }).toList();
+    _replaceScreen(screen.copyWith(components: updated));
+    notifyListeners();
+    _schedulePersist(pushHistory: true, historyLabel: 'Preset: $presetName');
+  }
+
+  static const List<String> _styleKeys = [
+    'color', 'backgroundColor', 'gradientEndColor', 'useGradient',
+    'fontSize', 'fontWeight', 'letterSpacing', 'lineHeight',
+    'padding', 'borderRadius', 'borderColor', 'borderWidth',
+    'elevation', 'opacity', 'shadowBlur', 'shadowOpacity', 'shadowOffsetY',
+  ];
+
+  bool copySelectedStyle() {
+    final comp = selectedComponent;
+    if (comp == null) return false;
+    _styleClipboard = {
+      for (final key in _styleKeys)
+        if (comp.properties.containsKey(key)) key: comp.properties[key],
+    };
+    notifyListeners();
+    return true;
+  }
+
+  Future<bool> pasteStyleToSelected() async {
+    if (_styleClipboard == null || !hasSelection) return false;
+    final screen = activeScreen;
+    if (screen == null) return false;
+    final style = _styleClipboard!;
+    final updated = screen.components.map((c) {
+      if (!_selectedComponentIds.contains(c.id)) return c;
+      if ((c.properties['locked'] as bool?) == true) return c;
+      return c.copyWith(
+        properties: Map<String, dynamic>.from(c.properties)..addAll(style),
+      );
+    }).toList();
+    _replaceScreen(screen.copyWith(components: updated));
+    notifyListeners();
+    _schedulePersist(pushHistory: true, historyLabel: 'Coller style');
     return true;
   }
 

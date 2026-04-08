@@ -28,6 +28,7 @@ L'éditeur est composé de :
 
 Dans la barre des écrans :
 
+- Chaque tab affiche le **nombre de composants** entre parenthèses : `Home (3)`.
 - `+` : ajouter un écran
 - Bouton `...` (actions écran) :
 - dupliquer écran
@@ -38,7 +39,8 @@ Dans la barre des écrans :
 ## 5. Ajouter des composants
 
 - Bouton `Ajouter composant`
-- Tu peux ajouter : Text, Button, Card, Image placeholder, TextField, AppBar, etc.
+- **Barre de recherche** en haut de la feuille : filtre les composants en temps réel par nom.
+- Composants disponibles : Text, Button, Card, Image placeholder, TextField, AppBar, Switch, Checkbox, Progress Bar, Badge, Container, Icon Button, FAB, Bottom Nav, Tab Bar, Banner, Stat Card, Circular Progress, Slider, Radio Group, Dropdown, List Tile, Search Bar, Rating Stars, **Carousel**, **Date Picker**, **Nav Drawer**, **Stepper**, **Bottom Sheet**.
 - Dans cette feuille, tu retrouves aussi `Mes templates` (templates persos).
 
 ## 6. Sélection, multi-sélection, calques
@@ -75,10 +77,12 @@ Après sélection d'un composant, tu peux modifier :
 - couleurs (color picker)
 - background + gradient
 - typo (taille, poids, espacement)
-- layout (largeur, hauteur, padding, marge, alignement, ligne)
+- layout (largeur, hauteur, padding, marge, alignement, ligne, **décalage X/Y**)
 - effets (bordure, opacité, rotation, scale, ombre)
 - actions (navigation vers un autre écran)
 - image locale (galerie)
+- **Copier le style** (icône pinceau vide) : copie toutes les propriétés visuelles du composant sélectionné.
+- **Coller le style** (icône pinceau plein) : applique le style copié à la sélection courante.
 
 Si aucun composant n'est sélectionné :
 
@@ -93,6 +97,8 @@ Tu as un contrôle `Taille preview` :
 - `Agrandir`
 
 Sur petit écran, ce contrôle passe automatiquement en menu déroulant pour éviter les débordements.
+
+**Zoom pinch** : activable depuis `Plus d'actions > Zoom pinch preview`. Une fois activé, tu peux pincer l'aperçu pour zoomer/dézoomer (0.4× à 3×).
 
 ## 10. Mode drag et grille
 
@@ -171,14 +177,67 @@ Dans `Plus d’actions` :
 - `Exporter Flutter Pro (.zip)` : crée un zip Flutter Pro
 - `Exporter Flutter Pro par mail` : envoie le zip Pro via partage Android
 
-## 16. Conseils pratiques
+## 16. Raccourcis clavier (physique)
+
+Sur tablette ou avec clavier physique connecté :
+
+| Raccourci | Action |
+|-----------|--------|
+| `Suppr` | Supprimer la sélection |
+| `Ctrl + Z` | Annuler (undo) |
+| `Ctrl + Y` | Rétablir (redo) |
+| `Ctrl + D` | Dupliquer la sélection |
+| `Ctrl + G` | Grouper la sélection |
+| `Ctrl + C` | Copier la sélection |
+| `Ctrl + V` | Coller |
+
+## 17. Aperçu plein écran (Full Preview)
+
+- Bouton `Plein écran` (ou menu) : ouvre une vue de navigation indépendante de l'éditeur.
+- Navigation dans l'aperçu : les boutons avec `Action au tap > Naviguer vers` fonctionnent réellement.
+- **Bouton retour** : revient à l'écran précédent dans l'historique de navigation.
+- **Sélecteur d'écran** (icône calques en haut à droite) : sauter directement à n'importe quel écran.
+- **Zoom** : activer/désactiver le pinch-zoom depuis l'icône en haut à droite.
+
+## 18. User Flow (carte des navigations)
+
+Dans `Plus d'actions > User Flow` :
+
+- Affiche une carte de tous les écrans et leurs liens de navigation.
+- Les flèches représentent les composants avec une action `Naviguer vers`.
+- Badges `entrée` / `sortie` indiquent le sens des navigations pour chaque écran.
+- L'affichage est zoomable (pinch ou molette) de 0.3× à 2.5×.
+
+## 19. Presets de thème
+
+Dans `Plus d'actions > Appliquer un preset thème` :
+
+Applique instantanément un jeu de couleurs cohérent à tous les composants non verrouillés.
+
+| Preset | Style |
+|--------|-------|
+| Material Teal | Vert sarcelle Material Design |
+| Bleu Océan | Bleu profond |
+| Violet Pro | Violet moderne |
+| Corail Warm | Tons chauds corail |
+| Dark Mode | Sombre avec accents gris/bleu |
+| Minimaliste | Blanc/gris épuré |
+
+## 20. Export aperçu PNG
+
+Dans `Plus d'actions > Exporter aperçu PNG` :
+
+- Capture l'aperçu mobile en image PNG.
+- Ouvre le menu de partage Android (enregistrer, envoyer par mail, etc.).
+
+## 21. Conseils pratiques
 
 - Pour éditer vite : utilise le panneau calques + multi-sélection + recherche.
 - Pour éviter les erreurs : verrouille les éléments finalisés.
 - Pour réorganiser proprement : active `Mode drag`, puis `Mode grille + snap`.
 - Pour présenter : utilise `Plein écran`.
 
-## 17. Dépannage rapide
+## 22. Dépannage rapide
 
 - Si le scroll est difficile : désactive `Mode drag`.
 - Si un composant ne bouge pas : vérifie qu'il n'est pas verrouillé.

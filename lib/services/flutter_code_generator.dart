@@ -585,6 +585,82 @@ Padding(
         Icon(Icons.star_border_rounded), Icon(Icons.star_border_rounded),
       ],
     )''');
+      case ComponentType.carousel:
+        return wrapped('''SizedBox(
+      width: $width, height: $height,
+      child: PageView(
+        children: [
+          Container(color: $backgroundColor, alignment: Alignment.center, child: const Text('Slide 1')),
+          Container(color: $backgroundColor, alignment: Alignment.center, child: const Text('Slide 2')),
+        ],
+      ),
+    )''');
+      case ComponentType.datePicker:
+        return wrapped('''InkWell(
+      onTap: () async {
+        await showDatePicker(
+          context: context,
+          initialDate: DateTime.now(),
+          firstDate: DateTime(2000),
+          lastDate: DateTime(2100),
+        );
+      },
+      child: Container(
+        padding: const EdgeInsets.all($padding),
+        decoration: BoxDecoration(
+          color: $backgroundColor,
+          borderRadius: BorderRadius.circular($borderRadius),
+          border: Border.all(color: $color),
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.calendar_today_outlined, color: $color),
+            const SizedBox(width: 8),
+            Text('$text', style: const TextStyle(color: $color, fontSize: $fontSize)),
+          ],
+        ),
+      ),
+    )''');
+      case ComponentType.navigationDrawer:
+        return wrapped('''Drawer(
+      width: $width,
+      child: ListView(
+        children: [
+          DrawerHeader(
+            decoration: BoxDecoration(color: $backgroundColor),
+            child: Text('Menu', style: const TextStyle(color: $color, fontSize: $fontSize, fontWeight: FontWeight.bold)),
+          ),
+          ListTile(leading: const Icon(Icons.home_rounded), title: const Text('Accueil'), onTap: () {}),
+          ListTile(leading: const Icon(Icons.person_rounded), title: const Text('Profil'), onTap: () {}),
+          ListTile(leading: const Icon(Icons.settings_rounded), title: const Text("Param\u00e8tres"), onTap: () {}),
+        ],
+      ),
+    )''');
+      case ComponentType.stepper:
+        return wrapped('''Stepper(
+      currentStep: 0,
+      steps: const [
+        Step(title: Text("\u00c9tape 1"), content: SizedBox.shrink()),
+        Step(title: Text("\u00c9tape 2"), content: SizedBox.shrink()),
+        Step(title: Text("\u00c9tape 3"), content: SizedBox.shrink()),
+      ],
+    )''');
+      case ComponentType.bottomSheetPreview:
+        return wrapped('''Container(
+      decoration: BoxDecoration(
+        color: $backgroundColor,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      padding: const EdgeInsets.all($padding),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Center(child: Container(width: 36, height: 4, decoration: BoxDecoration(color: $color, borderRadius: BorderRadius.circular(999)))),
+          const SizedBox(height: 12),
+          Text('$text', style: const TextStyle(color: $color, fontSize: $fontSize, fontWeight: FontWeight.bold)),
+        ],
+      ),
+    )''');
     }
   }
 

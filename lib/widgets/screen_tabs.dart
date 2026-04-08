@@ -41,9 +41,12 @@ class ScreenTabs extends StatelessWidget {
               itemBuilder: (context, index) {
                 final screen = screens[index];
                 final selected = screen.id == activeScreenId;
+                final count = screen.components.length;
                 return ChoiceChip(
                   selected: selected,
-                  label: Text(screen.name),
+                  label: Text(
+                    count > 0 ? '${screen.name} ($count)' : screen.name,
+                  ),
                   onSelected: (_) => onSelect(screen.id),
                 );
               },

@@ -107,7 +107,7 @@ class UIComponentModel {
           id: id,
           type: type,
           properties: _baseProperties(
-            text: 'J’accepte',
+            text: "J'accepte",
             width: 240,
             height: 56,
           ),
@@ -245,6 +245,52 @@ class UIComponentModel {
           properties: _baseProperties(text: '4/5', width: 180, height: 50)
             ..['progress'] = 0.8,
         );
+      case ComponentType.carousel:
+        return UIComponentModel(
+          id: id,
+          type: type,
+          properties: _baseProperties(
+            text: 'Slide 1,Slide 2,Slide 3',
+            width: 320,
+            height: 160,
+          ),
+        );
+      case ComponentType.datePicker:
+        return UIComponentModel(
+          id: id,
+          type: type,
+          properties: _baseProperties(text: '07 / 04 / 2026', width: 280, height: 80),
+        );
+      case ComponentType.navigationDrawer:
+        return UIComponentModel(
+          id: id,
+          type: type,
+          properties: _baseProperties(
+            text: 'Accueil,Profil,Paramètres,Aide',
+            width: 240,
+            height: 200,
+          ),
+        );
+      case ComponentType.stepper:
+        return UIComponentModel(
+          id: id,
+          type: type,
+          properties: _baseProperties(
+            text: 'Étape 1,Étape 2,Étape 3',
+            width: 300,
+            height: 80,
+          )..['progress'] = 0.33,
+        );
+      case ComponentType.bottomSheetPreview:
+        return UIComponentModel(
+          id: id,
+          type: type,
+          properties: _baseProperties(
+            text: 'Titre du panneau',
+            width: 320,
+            height: 120,
+          )..['subtitle'] = 'Contenu du bottom sheet',
+        );
     }
   }
 
@@ -290,6 +336,8 @@ class UIComponentModel {
       'actionType': 'none',
       'targetScreenId': '',
       'imagePath': '',
+      'offsetX': 0.0,
+      'offsetY': 0.0,
     };
   }
 
@@ -323,6 +371,8 @@ class UIComponentModel {
     rawProperties.putIfAbsent('responsiveVisibility', () => 'all');
     rawProperties.putIfAbsent('responsiveWidthMode', () => 'fixed');
     rawProperties.putIfAbsent('responsiveAlign', () => 'inherit');
+    rawProperties.putIfAbsent('offsetX', () => 0.0);
+    rawProperties.putIfAbsent('offsetY', () => 0.0);
     return UIComponentModel(
       id: json['id'] as String,
       type: ComponentTypeX.fromValue(json['type'] as String? ?? ''),

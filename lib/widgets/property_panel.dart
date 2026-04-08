@@ -16,6 +16,9 @@ class PropertyPanel extends StatelessWidget {
     required this.activeScreenId,
     required this.onPickImage,
     required this.selectedCount,
+    this.onCopyStyle,
+    this.onPasteStyle,
+    this.hasStyleClipboard = false,
   });
 
   final UIComponentModel? component;
@@ -28,6 +31,9 @@ class PropertyPanel extends StatelessWidget {
   final String? activeScreenId;
   final Future<void> Function() onPickImage;
   final int selectedCount;
+  final VoidCallback? onCopyStyle;
+  final VoidCallback? onPasteStyle;
+  final bool hasStyleClipboard;
 
   @override
   Widget build(BuildContext context) {
@@ -46,7 +52,7 @@ class PropertyPanel extends StatelessWidget {
               ),
               const SizedBox(height: 12),
               _ColorPickerField(
-                label: 'Background de l’écran',
+                label: "Background de l'écran",
                 color: Color(screenBackgroundColor),
                 onChanged: (color) =>
                     onUpdateScreenBackgroundColor(color.toARGB32()),
@@ -79,6 +85,8 @@ class PropertyPanel extends StatelessWidget {
     final height = ((props['height'] as num?) ?? 60).toDouble();
     final padding = ((props['padding'] as num?) ?? 12).toDouble();
     final margin = ((props['margin'] as num?) ?? 0).toDouble();
+    final offsetX = ((props['offsetX'] as num?) ?? 0).toDouble();
+    final offsetY = ((props['offsetY'] as num?) ?? 0).toDouble();
     final radius = ((props['borderRadius'] as num?) ?? 12).toDouble();
     final row = ((props['row'] as num?) ?? -1).toInt();
     final parentId = (props['parentId'] as String?) ?? '';
@@ -125,6 +133,18 @@ class PropertyPanel extends StatelessWidget {
                     ),
                   ),
                 ),
+                if (onCopyStyle != null)
+                  IconButton(
+                    tooltip: 'Copier le style',
+                    onPressed: onCopyStyle,
+                    icon: const Icon(Icons.format_paint_outlined),
+                  ),
+                if (onPasteStyle != null && hasStyleClipboard)
+                  IconButton(
+                    tooltip: 'Coller le style',
+                    onPressed: onPasteStyle,
+                    icon: const Icon(Icons.format_paint_rounded),
+                  ),
                 IconButton(
                   tooltip: 'Paramètres écran',
                   onPressed: onBackToScreenSettings,
@@ -262,6 +282,20 @@ class PropertyPanel extends StatelessWidget {
               min: 0,
               max: 40,
               onChanged: (value) => onUpdateProperty('margin', value),
+            ),
+            _SliderField(
+              label: 'Décalage X',
+              value: offsetX,
+              min: -120,
+              max: 120,
+              onChanged: (value) => onUpdateProperty('offsetX', value),
+            ),
+            _SliderField(
+              label: 'Décalage Y',
+              value: offsetY,
+              min: -120,
+              max: 120,
+              onChanged: (value) => onUpdateProperty('offsetY', value),
             ),
             _SliderField(
               label: 'Rayon bordure',

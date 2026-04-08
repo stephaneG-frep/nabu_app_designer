@@ -105,6 +105,9 @@ class ComponentRenderer extends StatelessWidget {
         ? BorderSide(color: borderColor, width: borderWidth)
         : BorderSide.none;
 
+    final offsetX = ((props['offsetX'] as num?) ?? 0).toDouble();
+    final offsetY = ((props['offsetY'] as num?) ?? 0).toDouble();
+
     final child = _buildByType(
       type: component.type,
       text: text,
@@ -153,11 +156,14 @@ class ComponentRenderer extends StatelessWidget {
                   )
                 : null,
           ),
-          child: Transform.rotate(
-            angle: (rotation * math.pi) / 180,
-            child: Transform.scale(
-              scale: (scale / 100).clamp(0.2, 3.0),
-              child: child,
+          child: Transform.translate(
+            offset: Offset(offsetX, offsetY),
+            child: Transform.rotate(
+              angle: (rotation * math.pi) / 180,
+              child: Transform.scale(
+                scale: (scale / 100).clamp(0.2, 3.0),
+                child: child,
+              ),
             ),
           ),
         ),
@@ -983,6 +989,232 @@ class ComponentRenderer extends StatelessWidget {
                 color: color,
                 size: commonTextStyle.fontSize! + 6,
               ),
+            ),
+          ),
+        );
+
+      case ComponentType.carousel:
+        final slides = _splitCsv(text, fallback: const ['Slide 1', 'Slide 2', 'Slide 3']);
+        return SizedBox(
+          width: width,
+          height: height,
+          child: Container(
+            decoration: _tileDecoration(
+              backgroundColor: backgroundColor,
+              gradientEndColor: gradientEndColor,
+              useGradient: useGradient,
+              borderRadius: borderRadius,
+              border: border,
+            ),
+            child: Stack(
+              children: [
+                PageView.builder(
+                  itemCount: slides.length,
+                  itemBuilder: (_, i) => Center(
+                    child: Padding(
+                      padding: EdgeInsets.all(padding),
+                      child: Text(slides[i], style: commonTextStyle, textAlign: TextAlign.center),
+                    ),
+                  ),
+                ),
+                Positioned(
+                  bottom: 8,
+                  left: 0,
+                  right: 0,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: List.generate(
+                      slides.length,
+                      (i) => Container(
+                        width: i == 0 ? 16 : 6,
+                        height: 6,
+                        margin: const EdgeInsets.symmetric(horizontal: 2),
+                        decoration: BoxDecoration(
+                          color: i == 0 ? color : color.withValues(alpha: 0.35),
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+
+      case ComponentType.datePicker:
+        return _tileContainer(
+          width: width,
+          height: height,
+          borderRadius: borderRadius,
+          backgroundColor: backgroundColor,
+          gradientEndColor: gradientEndColor,
+          useGradient: useGradient,
+          border: border,
+          padding: padding * 0.6,
+          child: Row(
+            children: [
+              Icon(Icons.calendar_today_outlined, color: color),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  text.isEmpty ? 'Sélectionner une date' : text,
+                  style: commonTextStyle,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              Icon(Icons.arrow_drop_down_rounded, color: color),
+            ],
+          ),
+        );
+
+      case ComponentType.navigationDrawer:
+        final navItems = _splitCsv(text, fallback: const ['Accueil', 'Profil', 'Paramètres']);
+        return SizedBox(
+          width: width,
+          height: height,
+          child: Container(
+            decoration: _tileDecoration(
+              backgroundColor: backgroundColor,
+              gradientEndColor: gradientEndColor,
+              useGradient: useGradient,
+              borderRadius: borderRadius,
+              border: border,
+            ),
+            child: Column(
+              children: [
+                Container(
+                  height: 36,
+                  color: color.withValues(alpha: 0.12),
+                  alignment: Alignment.centerLeft,
+                  padding: EdgeInsets.symmetric(horizontal: padding),
+                  child: Icon(Icons.menu_rounded, color: color),
+                ),
+                ...navItems.take(4).map(
+                  (item) => Padding(
+                    padding: EdgeInsets.symmetric(horizontal: padding * 0.6, vertical: 2),
+                    child: Row(
+                      children: [
+                        Icon(Icons.circle, size: 8, color: color.withValues(alpha: 0.6)),
+                        const SizedBox(width: 8),
+                        Text(item, style: commonTextStyle.copyWith(fontSize: commonTextStyle.fontSize! * 0.85)),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+
+      case ComponentType.stepper:
+        final steps = _splitCsv(text, fallback: const ['Étape 1', 'Étape 2', 'Étape 3']);
+        final activeStep = ((progress * steps.length).floor()).clamp(0, steps.length - 1);
+        return _tileContainer(
+          width: width,
+          height: height,
+          borderRadius: borderRadius,
+          backgroundColor: backgroundColor,
+          gradientEndColor: gradientEndColor,
+          useGradient: useGradient,
+          border: border,
+          padding: padding * 0.5,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: List.generate(steps.length * 2 - 1, (i) {
+              if (i.isOdd) {
+                return Expanded(
+                  child: Container(
+                    height: 2,
+                    color: (i ~/ 2) < activeStep
+                        ? color
+                        : color.withValues(alpha: 0.25),
+                  ),
+                );
+              }
+              final stepIndex = i ~/ 2;
+              final done = stepIndex < activeStep;
+              final active = stepIndex == activeStep;
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 22,
+                    height: 22,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: done || active ? color : color.withValues(alpha: 0.2),
+                    ),
+                    child: Center(
+                      child: done
+                          ? Icon(Icons.check_rounded, size: 14, color: backgroundColor)
+                          : Text(
+                              '${stepIndex + 1}',
+                              style: commonTextStyle.copyWith(
+                                fontSize: 11,
+                                color: active ? backgroundColor : color,
+                              ),
+                            ),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    steps[stepIndex],
+                    style: commonTextStyle.copyWith(fontSize: 9),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              );
+            }),
+          ),
+        );
+
+      case ComponentType.bottomSheetPreview:
+        return SizedBox(
+          width: width,
+          height: height,
+          child: Container(
+            decoration: _tileDecoration(
+              backgroundColor: backgroundColor,
+              gradientEndColor: gradientEndColor,
+              useGradient: useGradient,
+              borderRadius: borderRadius * 1.5,
+              border: border,
+            ),
+            child: Column(
+              children: [
+                const SizedBox(height: 8),
+                Center(
+                  child: Container(
+                    width: 36,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: color.withValues(alpha: 0.35),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Padding(
+                  padding: EdgeInsets.symmetric(horizontal: padding),
+                  child: Text(
+                    text,
+                    style: commonTextStyle.copyWith(fontWeight: FontWeight.w700),
+                  ),
+                ),
+                if (subtitle.isNotEmpty)
+                  Padding(
+                    padding: EdgeInsets.symmetric(horizontal: padding, vertical: 4),
+                    child: Text(
+                      subtitle,
+                      style: commonTextStyle.copyWith(
+                        fontSize: commonTextStyle.fontSize! * 0.85,
+                        color: color.withValues(alpha: 0.75),
+                      ),
+                    ),
+                  ),
+              ],
             ),
           ),
         );

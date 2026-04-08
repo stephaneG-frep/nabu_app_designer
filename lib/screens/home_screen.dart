@@ -45,7 +45,7 @@ class _HomeScreenState extends State<HomeScreen> {
         ScaffoldMessenger.of(context).hideCurrentSnackBar();
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Appuie encore sur retour pour quitter l’app'),
+            content: Text("Appuie encore sur retour pour quitter l'app"),
             duration: Duration(seconds: 2),
           ),
         );
@@ -56,7 +56,7 @@ class _HomeScreenState extends State<HomeScreen> {
           centerTitle: false,
           actions: [
             IconButton(
-              tooltip: 'Mode d’emploi',
+              tooltip: "Mode d'emploi",
               onPressed: () {
                 Navigator.of(context).push(
                   MaterialPageRoute<void>(builder: (_) => const HelpScreen()),

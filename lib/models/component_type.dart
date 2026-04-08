@@ -27,6 +27,11 @@ enum ComponentType {
   listTile,
   searchBar,
   ratingStars,
+  carousel,
+  datePicker,
+  navigationDrawer,
+  stepper,
+  bottomSheetPreview,
 }
 
 extension ComponentTypeX on ComponentType {
@@ -88,6 +93,16 @@ extension ComponentTypeX on ComponentType {
         return 'Search Bar';
       case ComponentType.ratingStars:
         return 'Rating Stars';
+      case ComponentType.carousel:
+        return 'Carousel';
+      case ComponentType.datePicker:
+        return 'Date Picker';
+      case ComponentType.navigationDrawer:
+        return 'Nav Drawer';
+      case ComponentType.stepper:
+        return 'Stepper';
+      case ComponentType.bottomSheetPreview:
+        return 'Bottom Sheet';
     }
   }
 

@@ -1,8 +1,14 @@
+
+import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
+import 'dart:io';
 
 import '../models/screen_template_type.dart';
 import '../providers/project_provider.dart';
@@ -15,6 +21,7 @@ import '../widgets/property_panel.dart';
 import '../widgets/screen_tabs.dart';
 import 'full_preview_screen.dart';
 import 'help_screen.dart';
+import 'user_flow_screen.dart';
 
 class EditorScreen extends StatefulWidget {
   const EditorScreen({super.key, required this.projectId});
@@ -31,18 +38,68 @@ class _EditorScreenState extends State<EditorScreen> {
   final ProjectFileService _projectFileService = const ProjectFileService();
   bool _gridSnapEnabled = false;
   bool _dragModeEnabled = false;
+  bool _zoomEnabled = false;
   _PreviewSizeMode _previewSizeMode = _PreviewSizeMode.normal;
   static const int _gridColumns = 2;
+  final GlobalKey _previewRepaintKey = GlobalKey();
 
   @override
   void initState() {
     super.initState();
+    HardwareKeyboard.instance.addHandler(_onKeyEvent);
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) {
-        return;
-      }
+      if (!mounted) return;
       context.read<ProjectProvider>().openProject(widget.projectId);
     });
+  }
+
+  @override
+  void dispose() {
+    HardwareKeyboard.instance.removeHandler(_onKeyEvent);
+    super.dispose();
+  }
+
+  bool _onKeyEvent(KeyEvent event) {
+    if (event is! KeyDownEvent) return false;
+    final ctrl = HardwareKeyboard.instance.isControlPressed ||
+        HardwareKeyboard.instance.isMetaPressed;
+    final provider = context.read<ProjectProvider>();
+
+    if (event.logicalKey == LogicalKeyboardKey.delete) {
+      if (provider.hasSelection) {
+        provider.removeSelectedComponent();
+        return true;
+      }
+    }
+    if (ctrl && event.logicalKey == LogicalKeyboardKey.keyZ) {
+      if (HardwareKeyboard.instance.isShiftPressed) {
+        if (provider.canRedo) provider.redo();
+      } else {
+        if (provider.canUndo) provider.undo();
+      }
+      return true;
+    }
+    if (ctrl && event.logicalKey == LogicalKeyboardKey.keyY) {
+      if (provider.canRedo) provider.redo();
+      return true;
+    }
+    if (ctrl && event.logicalKey == LogicalKeyboardKey.keyD) {
+      if (provider.hasSelection) provider.duplicateSelectedComponent();
+      return true;
+    }
+    if (ctrl && event.logicalKey == LogicalKeyboardKey.keyG) {
+      if (provider.canGroupSelection) provider.groupSelectedComponents();
+      return true;
+    }
+    if (ctrl && event.logicalKey == LogicalKeyboardKey.keyC) {
+      if (provider.hasSelection) provider.copySelectedComponents();
+      return true;
+    }
+    if (ctrl && event.logicalKey == LogicalKeyboardKey.keyV) {
+      if (provider.hasClipboard) provider.pasteClipboardComponents();
+      return true;
+    }
+    return false;
   }
 
   @override
@@ -74,7 +131,7 @@ class _EditorScreenState extends State<EditorScreen> {
             ),
           ],
           PopupMenuButton<_EditorMenuAction>(
-            tooltip: 'Plus d’actions',
+            tooltip: "Plus d'actions",
             onSelected: (action) {
               switch (action) {
                 case _EditorMenuAction.undo:
@@ -121,6 +178,24 @@ class _EditorScreenState extends State<EditorScreen> {
                   Navigator.of(context).push(
                     MaterialPageRoute<void>(builder: (_) => const HelpScreen()),
                   );
+                  break;
+                case _EditorMenuAction.openUserFlow:
+                  _openUserFlow(context);
+                  break;
+                case _EditorMenuAction.copyStyle:
+                  _copyStyle(context);
+                  break;
+                case _EditorMenuAction.pasteStyle:
+                  _pasteStyle(context);
+                  break;
+                case _EditorMenuAction.toggleZoom:
+                  setState(() => _zoomEnabled = !_zoomEnabled);
+                  break;
+                case _EditorMenuAction.exportPng:
+                  _exportPng(context);
+                  break;
+                case _EditorMenuAction.applyThemePreset:
+                  _showThemePresetPicker(context);
                   break;
                 case _EditorMenuAction.duplicate:
                   provider.duplicateSelectedComponent();
@@ -232,8 +307,12 @@ class _EditorScreenState extends State<EditorScreen> {
                 child: Text('Plein écran'),
               ),
               const PopupMenuItem(
+                value: _EditorMenuAction.openUserFlow,
+                child: Text('User Flow'),
+              ),
+              const PopupMenuItem(
                 value: _EditorMenuAction.openHelp,
-                child: Text('Mode d’emploi'),
+                child: Text("Mode d'emploi"),
               ),
               const PopupMenuDivider(),
               CheckedPopupMenuItem(
@@ -245,6 +324,11 @@ class _EditorScreenState extends State<EditorScreen> {
                 value: _EditorMenuAction.toggleGridSnap,
                 checked: _gridSnapEnabled,
                 child: const Text('Mode grille + snap'),
+              ),
+              CheckedPopupMenuItem(
+                value: _EditorMenuAction.toggleZoom,
+                checked: _zoomEnabled,
+                child: const Text('Zoom pinch preview'),
               ),
               const PopupMenuDivider(),
               PopupMenuItem(
@@ -261,6 +345,24 @@ class _EditorScreenState extends State<EditorScreen> {
                 value: _EditorMenuAction.pasteSelection,
                 enabled: provider.hasClipboard,
                 child: const Text('Coller'),
+              ),
+              PopupMenuItem(
+                value: _EditorMenuAction.copyStyle,
+                enabled: provider.hasSelection && !provider.isMultiSelecting,
+                child: const Text('Copier le style'),
+              ),
+              PopupMenuItem(
+                value: _EditorMenuAction.pasteStyle,
+                enabled: provider.hasSelection && provider.hasStyleClipboard,
+                child: const Text('Coller le style'),
+              ),
+              PopupMenuItem(
+                value: _EditorMenuAction.exportPng,
+                child: const Text('Exporter apercu PNG'),
+              ),
+              const PopupMenuItem(
+                value: _EditorMenuAction.applyThemePreset,
+                child: Text('Appliquer un preset theme'),
               ),
               PopupMenuItem(
                 value: _EditorMenuAction.groupSelection,
@@ -565,6 +667,10 @@ class _EditorScreenState extends State<EditorScreen> {
                         dragModeEnabled: _dragModeEnabled,
                         gridSnapEnabled: _gridSnapEnabled,
                         gridColumns: _gridColumns,
+                        zoomEnabled: _zoomEnabled,
+                        previewKey: _previewRepaintKey,
+                        onCopyStyle: () => _copyStyle(context),
+                        onPasteStyle: () => _pasteStyle(context),
                       )
                     : _NarrowLayout(
                         provider: provider,
@@ -574,6 +680,10 @@ class _EditorScreenState extends State<EditorScreen> {
                         dragModeEnabled: _dragModeEnabled,
                         gridSnapEnabled: _gridSnapEnabled,
                         gridColumns: _gridColumns,
+                        zoomEnabled: _zoomEnabled,
+                        previewKey: _previewRepaintKey,
+                        onCopyStyle: () => _copyStyle(context),
+                        onPasteStyle: () => _pasteStyle(context),
                       ),
               ),
             ],
@@ -625,7 +735,7 @@ class _EditorScreenState extends State<EditorScreen> {
                   Expanded(
                     child: entries.isEmpty
                         ? const Center(
-                            child: Text('Aucun point d’historique disponible.'),
+                            child: Text("Aucun point d'historique disponible."),
                           )
                         : ListView.separated(
                             itemCount: entries.length,
@@ -689,9 +799,9 @@ class _EditorScreenState extends State<EditorScreen> {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Vider l’historique ?'),
+        title: const Text("Vider l'historique ?"),
         content: const Text(
-          'Cette action supprime les points précédents et garde uniquement l’état actuel.',
+          "Cette action supprime les points précédents et garde uniquement l'état actuel.",
         ),
         actions: [
           TextButton(
@@ -799,7 +909,7 @@ class _EditorScreenState extends State<EditorScreen> {
         content: TextField(
           controller: controller,
           autofocus: true,
-          decoration: const InputDecoration(labelText: 'Nom de l’écran'),
+          decoration: const InputDecoration(labelText: "Nom de l'écran"),
         ),
         actions: [
           TextButton(
@@ -1067,14 +1177,14 @@ class _EditorScreenState extends State<EditorScreen> {
         [XFile(path)],
         subject: 'Projet UI JSON - ${project.name}',
         text:
-            'Bonjour,\n\nVoici l’export JSON du projet "${project.name}".\n\nGénéré avec Nabu App Designer.',
+            'Bonjour,\n\nVoici l\'export JSON du projet "${project.name}".\n\nGénéré avec Nabu App Designer.',
       );
     } catch (_) {
       if (!context.mounted) {
         return;
       }
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Impossible d’ouvrir le partage e-mail.')),
+        const SnackBar(content: Text("Impossible d'ouvrir le partage e-mail.")),
       );
       return;
     }
@@ -1104,7 +1214,7 @@ class _EditorScreenState extends State<EditorScreen> {
             minLines: 8,
             maxLines: 16,
             decoration: const InputDecoration(
-              hintText: 'Colle ici le JSON d’un projet exporté',
+              hintText: "Colle ici le JSON d'un projet exporté",
             ),
           ),
         ),
@@ -1294,14 +1404,14 @@ class _EditorScreenState extends State<EditorScreen> {
         [XFile(path)],
         subject: 'Export Flutter V2 - ${project.name}',
         text:
-            'Bonjour,\n\nVoici l’export Flutter V2 du projet "${project.name}".\n\nGénéré avec Nabu App Designer.',
+            'Bonjour,\n\nVoici l\'export Flutter V2 du projet "${project.name}".\n\nGénéré avec Nabu App Designer.',
       );
     } catch (_) {
       if (!context.mounted) {
         return;
       }
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Impossible d’ouvrir le partage e-mail.')),
+        const SnackBar(content: Text("Impossible d'ouvrir le partage e-mail.")),
       );
       return;
     }
@@ -1333,14 +1443,14 @@ class _EditorScreenState extends State<EditorScreen> {
         [XFile(path)],
         subject: 'Export Flutter Pro - ${project.name}',
         text:
-            'Bonjour,\n\nVoici l’export Flutter Pro du projet "${project.name}".\n\nGénéré avec Nabu App Designer.',
+            'Bonjour,\n\nVoici l\'export Flutter Pro du projet "${project.name}".\n\nGénéré avec Nabu App Designer.',
       );
     } catch (_) {
       if (!context.mounted) {
         return;
       }
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Impossible d’ouvrir le partage e-mail.')),
+        const SnackBar(content: Text("Impossible d'ouvrir le partage e-mail.")),
       );
       return;
     }
@@ -1483,6 +1593,118 @@ class _EditorScreenState extends State<EditorScreen> {
     );
   }
 
+  Future<void> _showThemePresetPicker(BuildContext context) async {
+    final provider = context.read<ProjectProvider>();
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Padding(
+              padding: EdgeInsets.fromLTRB(16, 8, 16, 4),
+              child: Text(
+                'Appliquer un preset de theme',
+                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
+              ),
+            ),
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 16),
+              child: Text(
+                'Applique les couleurs et styles a tous les composants non verrouilles.',
+                style: TextStyle(fontSize: 12),
+              ),
+            ),
+            const Divider(),
+            ...ProjectProvider.themePresets.entries.map(
+              (entry) => ListTile(
+                leading: Container(
+                  width: 28, height: 28,
+                  decoration: BoxDecoration(
+                    color: Color((entry.value['color'] as int?) ?? 0xFF2A9D8F),
+                    borderRadius: BorderRadius.circular(
+                      ((entry.value['borderRadius'] as double?) ?? 8).clamp(0, 20),
+                    ),
+                    border: Border.all(color: Colors.black12),
+                  ),
+                ),
+                title: Text(entry.key),
+                onTap: () async {
+                  Navigator.of(ctx).pop();
+                  await provider.applyThemePreset(entry.key);
+                  if (!context.mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Preset "${entry.key}" applique.')),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _openUserFlow(BuildContext context) {
+    final provider = context.read<ProjectProvider>();
+    final project = provider.activeProject;
+    if (project == null) return;
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => UserFlowScreen(projectId: project.id),
+      ),
+    );
+  }
+
+  void _copyStyle(BuildContext context) {
+    final ok = context.read<ProjectProvider>().copySelectedStyle();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(ok ? 'Style copié.' : 'Sélectionne un composant.')),
+    );
+  }
+
+  Future<void> _pasteStyle(BuildContext context) async {
+    final ok = await context.read<ProjectProvider>().pasteStyleToSelected();
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(ok ? 'Style collé.' : 'Aucun style dans le presse-papiers.')),
+    );
+  }
+
+  Future<void> _exportPng(BuildContext context) async {
+    try {
+      final boundary = _previewRepaintKey.currentContext?.findRenderObject()
+          as RenderRepaintBoundary?;
+      if (boundary == null) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Preview introuvable pour la capture.')),
+          );
+        }
+        return;
+      }
+      final image = await boundary.toImage(pixelRatio: 2.0);
+      final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+      if (byteData == null) return;
+      final bytes = byteData.buffer.asUint8List();
+      final dir = await getTemporaryDirectory();
+      final file = File('${dir.path}/nabu_preview.png');
+      await file.writeAsBytes(bytes);
+      if (!context.mounted) return;
+      await Share.shareXFiles(
+        [XFile(file.path)],
+        subject: 'Aperçu écran - Nabu App Designer',
+      );
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erreur export PNG: $e')),
+        );
+      }
+    }
+  }
+
   Future<void> _showComponentTemplateLibrary(BuildContext context) async {
     await showModalBottomSheet<void>(
       context: context,
@@ -1496,7 +1718,7 @@ class _EditorScreenState extends State<EditorScreen> {
                 leading: Icon(Icons.info_outline_rounded),
                 title: Text('Aucun template enregistré'),
                 subtitle: Text(
-                  'Sélectionne des éléments puis Plus d’actions > Enregistrer en template.',
+                  "Sélectionne des éléments puis Plus d'actions > Enregistrer en template.",
                 ),
               );
             }
@@ -1622,8 +1844,11 @@ enum _EditorMenuAction {
   openTimeline,
   openFullscreen,
   openHelp,
+  openUserFlow,
   copySelection,
   pasteSelection,
+  copyStyle,
+  pasteStyle,
   groupSelection,
   ungroupSelection,
   selectGroup,
@@ -1632,6 +1857,7 @@ enum _EditorMenuAction {
   detachFromParent,
   toggleDragMode,
   toggleGridSnap,
+  toggleZoom,
   duplicate,
   bringFront,
   sendBack,
@@ -1643,6 +1869,8 @@ enum _EditorMenuAction {
   deleteSelection,
   lockSelection,
   unlockSelection,
+  exportPng,
+  applyThemePreset,
   addTemplateScreen,
   openTemplateLibrary,
   exportJson,
@@ -1669,6 +1897,10 @@ class _WideLayout extends StatelessWidget {
     required this.dragModeEnabled,
     required this.gridSnapEnabled,
     required this.gridColumns,
+    required this.zoomEnabled,
+    required this.previewKey,
+    required this.onCopyStyle,
+    required this.onPasteStyle,
   });
 
   final ProjectProvider provider;
@@ -1677,6 +1909,10 @@ class _WideLayout extends StatelessWidget {
   final bool dragModeEnabled;
   final bool gridSnapEnabled;
   final int gridColumns;
+  final bool zoomEnabled;
+  final GlobalKey previewKey;
+  final VoidCallback onCopyStyle;
+  final VoidCallback onPasteStyle;
 
   @override
   Widget build(BuildContext context) {
@@ -1696,28 +1932,39 @@ class _WideLayout extends StatelessWidget {
       _PreviewSizeMode.expanded => 520.0,
     };
 
+    final devicePreview = RepaintBoundary(
+      key: previewKey,
+      child: DevicePreview(
+        screen: provider.activeScreen,
+        selectedComponentIds: provider.selectedComponentIds,
+        onSelectComponent: provider.selectComponent,
+        onToggleComponentSelection: provider.toggleComponentSelection,
+        onBackgroundTap: provider.clearSelectedComponent,
+        frameMaxWidth: frameMaxWidth,
+        dragEnabled: dragModeEnabled,
+        showGrid: gridSnapEnabled,
+        onMoveComponentBefore: (draggedId, targetId) =>
+            provider.moveComponentBefore(
+              draggedId: draggedId,
+              targetId: targetId,
+              snapToGrid: gridSnapEnabled,
+              gridColumns: gridColumns,
+            ),
+      ),
+    );
+
     return Row(
       children: [
         Expanded(
           flex: previewFlex,
           child: Center(
-            child: DevicePreview(
-              screen: provider.activeScreen,
-              selectedComponentIds: provider.selectedComponentIds,
-              onSelectComponent: provider.selectComponent,
-              onToggleComponentSelection: provider.toggleComponentSelection,
-              onBackgroundTap: provider.clearSelectedComponent,
-              frameMaxWidth: frameMaxWidth,
-              dragEnabled: dragModeEnabled,
-              showGrid: gridSnapEnabled,
-              onMoveComponentBefore: (draggedId, targetId) =>
-                  provider.moveComponentBefore(
-                    draggedId: draggedId,
-                    targetId: targetId,
-                    snapToGrid: gridSnapEnabled,
-                    gridColumns: gridColumns,
-                  ),
-            ),
+            child: zoomEnabled
+                ? InteractiveViewer(
+                    minScale: 0.4,
+                    maxScale: 3.0,
+                    child: devicePreview,
+                  )
+                : devicePreview,
           ),
         ),
         const SizedBox(width: 16),
@@ -1755,6 +2002,9 @@ class _WideLayout extends StatelessWidget {
                       provider.activeScreen?.backgroundColor ?? 0xFFFFFFFF,
                   onUpdateScreenBackgroundColor:
                       provider.updateActiveScreenBackgroundColor,
+                  onCopyStyle: onCopyStyle,
+                  onPasteStyle: onPasteStyle,
+                  hasStyleClipboard: provider.hasStyleClipboard,
                 ),
               ),
             ],
@@ -1773,6 +2023,10 @@ class _NarrowLayout extends StatelessWidget {
     required this.dragModeEnabled,
     required this.gridSnapEnabled,
     required this.gridColumns,
+    required this.zoomEnabled,
+    required this.previewKey,
+    required this.onCopyStyle,
+    required this.onPasteStyle,
   });
 
   final ProjectProvider provider;
@@ -1781,6 +2035,10 @@ class _NarrowLayout extends StatelessWidget {
   final bool dragModeEnabled;
   final bool gridSnapEnabled;
   final int gridColumns;
+  final bool zoomEnabled;
+  final GlobalKey previewKey;
+  final VoidCallback onCopyStyle;
+  final VoidCallback onPasteStyle;
 
   @override
   Widget build(BuildContext context) {
@@ -1801,28 +2059,39 @@ class _NarrowLayout extends StatelessWidget {
           _PreviewSizeMode.expanded => 520.0,
         };
 
+        final devicePreview = RepaintBoundary(
+          key: previewKey,
+          child: DevicePreview(
+            screen: provider.activeScreen,
+            selectedComponentIds: provider.selectedComponentIds,
+            onSelectComponent: provider.selectComponent,
+            onToggleComponentSelection: provider.toggleComponentSelection,
+            onBackgroundTap: provider.clearSelectedComponent,
+            frameMaxWidth: frameMaxWidth,
+            dragEnabled: dragModeEnabled,
+            showGrid: gridSnapEnabled,
+            onMoveComponentBefore: (draggedId, targetId) =>
+                provider.moveComponentBefore(
+                  draggedId: draggedId,
+                  targetId: targetId,
+                  snapToGrid: gridSnapEnabled,
+                  gridColumns: gridColumns,
+                ),
+          ),
+        );
+
         return ListView(
           children: [
             SizedBox(
               height: previewHeight,
               child: Center(
-                child: DevicePreview(
-                  screen: provider.activeScreen,
-                  selectedComponentIds: provider.selectedComponentIds,
-                  onSelectComponent: provider.selectComponent,
-                  onToggleComponentSelection: provider.toggleComponentSelection,
-                  onBackgroundTap: provider.clearSelectedComponent,
-                  frameMaxWidth: frameMaxWidth,
-                  dragEnabled: dragModeEnabled,
-                  showGrid: gridSnapEnabled,
-                  onMoveComponentBefore: (draggedId, targetId) =>
-                      provider.moveComponentBefore(
-                        draggedId: draggedId,
-                        targetId: targetId,
-                        snapToGrid: gridSnapEnabled,
-                        gridColumns: gridColumns,
-                      ),
-                ),
+                child: zoomEnabled
+                    ? InteractiveViewer(
+                        minScale: 0.4,
+                        maxScale: 3.0,
+                        child: devicePreview,
+                      )
+                    : devicePreview,
               ),
             ),
             const SizedBox(height: 12),
@@ -1851,6 +2120,9 @@ class _NarrowLayout extends StatelessWidget {
                   provider.activeScreen?.backgroundColor ?? 0xFFFFFFFF,
               onUpdateScreenBackgroundColor:
                   provider.updateActiveScreenBackgroundColor,
+              onCopyStyle: onCopyStyle,
+              onPasteStyle: onPasteStyle,
+              hasStyleClipboard: provider.hasStyleClipboard,
             ),
           ],
         );

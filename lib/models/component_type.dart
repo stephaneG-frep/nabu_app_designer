@@ -32,6 +32,13 @@ enum ComponentType {
   navigationDrawer,
   stepper,
   bottomSheetPreview,
+  segmentedButton,
+  expansionTile,
+  alertDialog,
+  snackbarPreview,
+  dataTable,
+  skeleton,
+  annotation,
 }
 
 extension ComponentTypeX on ComponentType {
@@ -103,6 +110,20 @@ extension ComponentTypeX on ComponentType {
         return 'Stepper';
       case ComponentType.bottomSheetPreview:
         return 'Bottom Sheet';
+      case ComponentType.segmentedButton:
+        return 'Segmented Button';
+      case ComponentType.expansionTile:
+        return 'Expansion Tile';
+      case ComponentType.alertDialog:
+        return 'Alert Dialog';
+      case ComponentType.snackbarPreview:
+        return 'Snackbar';
+      case ComponentType.dataTable:
+        return 'Data Table';
+      case ComponentType.skeleton:
+        return 'Skeleton';
+      case ComponentType.annotation:
+        return 'Annotation';
     }
   }
 

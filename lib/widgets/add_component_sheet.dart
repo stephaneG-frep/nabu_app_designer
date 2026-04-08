@@ -64,6 +64,13 @@ class _AddComponentSheetState extends State<AddComponentSheet> {
     (ComponentType.navigationDrawer, Icons.menu_rounded),
     (ComponentType.stepper, Icons.linear_scale_rounded),
     (ComponentType.bottomSheetPreview, Icons.vertical_align_bottom_rounded),
+    (ComponentType.segmentedButton, Icons.splitscreen_rounded),
+    (ComponentType.expansionTile, Icons.expand_rounded),
+    (ComponentType.alertDialog, Icons.warning_amber_rounded),
+    (ComponentType.snackbarPreview, Icons.sms_outlined),
+    (ComponentType.dataTable, Icons.table_chart_outlined),
+    (ComponentType.skeleton, Icons.blur_on_rounded),
+    (ComponentType.annotation, Icons.sticky_note_2_outlined),
   ];
 
   @override

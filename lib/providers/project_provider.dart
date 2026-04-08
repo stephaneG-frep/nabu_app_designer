@@ -1060,6 +1060,26 @@ class ProjectProvider extends ChangeNotifier {
     _schedulePersist(pushHistory: true, historyLabel: 'Preset: $presetName');
   }
 
+  Future<void> applyDesignToken({
+    required int accentColor,
+    required int backgroundColor,
+  }) async {
+    final screen = activeScreen;
+    if (screen == null) return;
+    final updated = screen.components.map((c) {
+      if ((c.properties['locked'] as bool?) == true) return c;
+      return c.copyWith(
+        properties: Map<String, dynamic>.from(c.properties)
+          ..['color'] = accentColor
+          ..['borderColor'] = accentColor
+          ..['backgroundColor'] = backgroundColor,
+      );
+    }).toList();
+    _replaceScreen(screen.copyWith(components: updated));
+    notifyListeners();
+    _schedulePersist(pushHistory: true, historyLabel: 'Design token');
+  }
+
   static const List<String> _styleKeys = [
     'color', 'backgroundColor', 'gradientEndColor', 'useGradient',
     'fontSize', 'fontWeight', 'letterSpacing', 'lineHeight',

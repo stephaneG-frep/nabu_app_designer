@@ -1218,7 +1218,409 @@ class ComponentRenderer extends StatelessWidget {
             ),
           ),
         );
+
+      case ComponentType.segmentedButton:
+        final segments = _splitCsv(
+          text,
+          fallback: const ['Option A', 'Option B', 'Option C'],
+        );
+        return SizedBox(
+          width: width,
+          height: height,
+          child: Container(
+            decoration: BoxDecoration(
+              border: Border.all(color: color.withValues(alpha: 0.5)),
+              borderRadius: BorderRadius.circular(borderRadius),
+            ),
+            clipBehavior: Clip.antiAlias,
+            child: Row(
+              children: List.generate(segments.length, (i) {
+                final selected = i == 0;
+                return Expanded(
+                  child: Container(
+                    color: selected ? color.withValues(alpha: 0.15) : backgroundColor,
+                    child: Center(
+                      child: Padding(
+                        padding: EdgeInsets.symmetric(horizontal: padding * 0.4),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (selected) ...[
+                              Icon(Icons.check_rounded, size: 14, color: color),
+                              const SizedBox(width: 4),
+                            ],
+                            Flexible(
+                              child: Text(
+                                segments[i],
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: commonTextStyle.copyWith(
+                                  fontSize: commonTextStyle.fontSize! * 0.85,
+                                  color: selected ? color : color.withValues(alpha: 0.7),
+                                  fontWeight: selected ? FontWeight.w700 : FontWeight.w400,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              }),
+            ),
+          ),
+        );
+
+      case ComponentType.expansionTile:
+        return _tileContainer(
+          width: width,
+          height: height,
+          borderRadius: borderRadius,
+          backgroundColor: backgroundColor,
+          gradientEndColor: gradientEndColor,
+          useGradient: useGradient,
+          border: border,
+          padding: padding * 0.6,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      text,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: commonTextStyle.copyWith(fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                  Icon(Icons.expand_more_rounded, color: color),
+                ],
+              ),
+              if (subtitle.isNotEmpty && height > 80) ...[
+                const SizedBox(height: 6),
+                Container(
+                  width: double.infinity,
+                  height: 1,
+                  color: color.withValues(alpha: 0.15),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  subtitle,
+                  style: commonTextStyle.copyWith(
+                    fontSize: commonTextStyle.fontSize! * 0.85,
+                    color: color.withValues(alpha: 0.75),
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ],
+          ),
+        );
+
+      case ComponentType.alertDialog:
+        return SizedBox(
+          width: width,
+          height: height,
+          child: Card(
+            elevation: elevation + 4,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(borderRadius),
+              side: borderSide,
+            ),
+            color: backgroundColor,
+            child: Padding(
+              padding: EdgeInsets.all(padding),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    text,
+                    style: commonTextStyle.copyWith(fontWeight: FontWeight.w700),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 8),
+                  Expanded(
+                    child: Text(
+                      subtitle.isEmpty ? 'Message de confirmation' : subtitle,
+                      style: commonTextStyle.copyWith(
+                        fontSize: commonTextStyle.fontSize! * 0.85,
+                        color: color.withValues(alpha: 0.75),
+                      ),
+                    ),
+                  ),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      TextButton(
+                        onPressed: null,
+                        child: Text(
+                          'Annuler',
+                          style: commonTextStyle.copyWith(
+                            fontSize: commonTextStyle.fontSize! * 0.85,
+                            color: color.withValues(alpha: 0.7),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      ElevatedButton(
+                        onPressed: null,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: color,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(borderRadius * 0.6),
+                          ),
+                          padding: EdgeInsets.symmetric(
+                            horizontal: padding * 0.8,
+                            vertical: padding * 0.4,
+                          ),
+                        ),
+                        child: Text(
+                          'Confirmer',
+                          style: commonTextStyle.copyWith(
+                            fontSize: commonTextStyle.fontSize! * 0.85,
+                            color: backgroundColor,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+
+      case ComponentType.snackbarPreview:
+        return SizedBox(
+          width: width,
+          height: height,
+          child: Material(
+            elevation: elevation + 2,
+            borderRadius: BorderRadius.circular(borderRadius),
+            color: useGradient ? backgroundColor : const Color(0xFF323232),
+            child: Container(
+              padding: EdgeInsets.symmetric(
+                horizontal: padding,
+                vertical: padding * 0.5,
+              ),
+              decoration: BoxDecoration(
+                gradient: useGradient
+                    ? LinearGradient(colors: [backgroundColor, gradientEndColor])
+                    : null,
+                borderRadius: BorderRadius.circular(borderRadius),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      text,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: commonTextStyle.copyWith(
+                        color: useGradient ? color : Colors.white,
+                        fontSize: commonTextStyle.fontSize! * 0.9,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    'OK',
+                    style: commonTextStyle.copyWith(
+                      color: useGradient ? color : color,
+                      fontWeight: FontWeight.w700,
+                      fontSize: commonTextStyle.fontSize! * 0.9,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+
+      case ComponentType.dataTable:
+        final headers = _splitCsv(text, fallback: const ['Col 1', 'Col 2', 'Col 3']);
+        final rowsRaw = subtitle.split('|');
+        final dataRows = rowsRaw
+            .where((r) => r.trim().isNotEmpty)
+            .map((r) => _splitCsv(r, fallback: const ['-']))
+            .toList();
+        final colCount = headers.length;
+
+        Widget headerCell(String label) => Expanded(
+          child: Container(
+            padding: EdgeInsets.symmetric(
+              horizontal: padding * 0.4,
+              vertical: padding * 0.3,
+            ),
+            color: color.withValues(alpha: 0.12),
+            child: Text(
+              label,
+              style: commonTextStyle.copyWith(
+                fontSize: commonTextStyle.fontSize! * 0.8,
+                fontWeight: FontWeight.w700,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        );
+
+        Widget dataCell(String label) => Expanded(
+          child: Padding(
+            padding: EdgeInsets.symmetric(
+              horizontal: padding * 0.4,
+              vertical: padding * 0.25,
+            ),
+            child: Text(
+              label,
+              style: commonTextStyle.copyWith(
+                fontSize: commonTextStyle.fontSize! * 0.78,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        );
+
+        return SizedBox(
+          width: width,
+          height: height,
+          child: Container(
+            decoration: _tileDecoration(
+              backgroundColor: backgroundColor,
+              gradientEndColor: gradientEndColor,
+              useGradient: useGradient,
+              borderRadius: borderRadius,
+              border: border ?? Border.all(color: color.withValues(alpha: 0.2)),
+            ),
+            clipBehavior: Clip.antiAlias,
+            child: Column(
+              children: [
+                Row(children: headers.map(headerCell).toList()),
+                Expanded(
+                  child: ListView.separated(
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: dataRows.length,
+                    separatorBuilder: (_, _) => Divider(
+                      height: 1,
+                      color: color.withValues(alpha: 0.1),
+                    ),
+                    itemBuilder: (_, rowIdx) {
+                      final cells = dataRows[rowIdx];
+                      return Row(
+                        children: List.generate(
+                          colCount,
+                          (ci) => dataCell(ci < cells.length ? cells[ci] : '-'),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+
+      case ComponentType.skeleton:
+        return SizedBox(
+          width: width,
+          height: height,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _skeletonLine(
+                width: width,
+                height: height * 0.35,
+                color: color,
+                radius: borderRadius,
+              ),
+              SizedBox(height: height * 0.06),
+              _skeletonLine(
+                width: width * 0.75,
+                height: height * 0.12,
+                color: color,
+                radius: borderRadius * 0.5,
+              ),
+              SizedBox(height: height * 0.04),
+              _skeletonLine(
+                width: width * 0.9,
+                height: height * 0.1,
+                color: color,
+                radius: borderRadius * 0.5,
+              ),
+              SizedBox(height: height * 0.04),
+              _skeletonLine(
+                width: width * 0.6,
+                height: height * 0.1,
+                color: color,
+                radius: borderRadius * 0.5,
+              ),
+            ],
+          ),
+        );
+
+      case ComponentType.annotation:
+        return SizedBox(
+          width: width,
+          height: height,
+          child: Container(
+            padding: EdgeInsets.all(padding * 0.7),
+            decoration: BoxDecoration(
+              color: backgroundColor,
+              borderRadius: BorderRadius.circular(borderRadius * 0.5),
+              border: Border.all(color: color.withValues(alpha: 0.5)),
+              boxShadow: [
+                BoxShadow(
+                  color: color.withValues(alpha: 0.12),
+                  blurRadius: 6,
+                  offset: const Offset(2, 2),
+                ),
+              ],
+            ),
+            child: Stack(
+              children: [
+                Text(
+                  text,
+                  style: commonTextStyle.copyWith(
+                    fontSize: commonTextStyle.fontSize! * 0.85,
+                    color: color,
+                    fontStyle: FontStyle.italic,
+                  ),
+                ),
+                Positioned(
+                  top: 0,
+                  right: 0,
+                  child: Icon(
+                    Icons.push_pin_outlined,
+                    size: 14,
+                    color: color.withValues(alpha: 0.6),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
     }
+  }
+
+  Widget _skeletonLine({
+    required double width,
+    required double height,
+    required Color color,
+    required double radius,
+  }) {
+    return Container(
+      width: width,
+      height: height.clamp(6.0, 200.0),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(radius),
+      ),
+    );
   }
 
   Widget _tileContainer({

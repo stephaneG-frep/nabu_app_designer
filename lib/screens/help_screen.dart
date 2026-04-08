@@ -30,22 +30,28 @@ class _QuickGuideTab extends StatelessWidget {
   Widget build(BuildContext context) {
     final steps = <String>[
       "1. Crée un projet depuis l'accueil.",
-      '2. Ouvre le projet puis ajoute des composants (recherche par nom dans la feuille).',
-      '3. Sélectionne un composant et modifie ses propriétés.',
-      '4. Copie/colle le style entre composants (icônes pinceau dans Propriétés).',
-      '5. Active Mode drag pour glisser-déposer.',
-      '6. Active Mode grille + snap pour caler les éléments.',
-      '7. Utilise Calques (recherche + filtres) pour retrouver vite un élément.',
-      '8. Groupe des éléments, copie/colle ta sélection.',
-      '9. Imbrique des composants avec parent/enfant.',
-      '10. Enregistre ta sélection en template perso.',
-      '11. Règle les contraintes responsive (visibilité, largeur, alignement).',
-      '12. Applique un preset de thème depuis Plus actions pour harmoniser les couleurs.',
-      '13. Ouvre User Flow pour visualiser la carte des navigations.',
-      '14. Exporte JSON/ZIP et partage par e-mail si besoin.',
-      '15. Génère aussi le bundle Flutter Pro structuré.',
-      '16. Exporte un aperçu PNG depuis Plus actions.',
-      '17. Ouvre la timeline pour revenir à un état précédent, même après redémarrage.',
+      '2. Ouvre le projet puis ajoute des composants (recherche parmi 36 types).',
+      '3. Utilise Auto-layout sur un Container pour arranger ses enfants en ligne ou colonne.',
+      '4. Ajoute des Annotations (post-its) pour commenter le design.',
+      '5. Sélectionne un composant et modifie ses propriétés.',
+      '6. Copie/colle le style entre composants (icônes pinceau dans Propriétés).',
+      '7. Active Mode drag pour glisser-déposer.',
+      '8. Active Mode grille + snap pour caler les éléments.',
+      '9. Ajoute des guides depuis Plus actions (horizontal/vertical, effacer).',
+      '10. Active Preview sombre pour voir le rendu en dark mode.',
+      '11. Utilise Calques (recherche + filtres) pour retrouver vite un élément.',
+      '12. Groupe des éléments, copie/colle ta sélection.',
+      '13. Imbrique des composants avec parent/enfant.',
+      '14. Enregistre ta sélection en template perso.',
+      '15. Règle les contraintes responsive (visibilité, largeur, alignement).',
+      '16. Applique un preset de thème ou des design tokens pour harmoniser les couleurs.',
+      '17. Ouvre User Flow pour visualiser la carte des navigations.',
+      '18. Ouvre Multi-écrans pour voir tous les écrans côte à côte.',
+      '19. Lance Mode présentation pour un slideshow automatique.',
+      '20. Exporte JSON/ZIP et partage par e-mail si besoin.',
+      '21. Génère aussi le bundle Flutter Pro structuré.',
+      '22. Exporte un aperçu PNG depuis Plus actions.',
+      '23. Ouvre la timeline pour revenir à un état précédent, même après redémarrage.',
     ];
 
     return ListView(
@@ -66,12 +72,12 @@ class _QuickGuideTab extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 12),
-        const _InfoCard(
+        _InfoCard(
           title: 'Raccourcis Clavier',
           child: _KeyboardShortcutsWidget(),
         ),
         const SizedBox(height: 12),
-        const _InfoCard(
+        _InfoCard(
           title: 'Astuce',
           child: Text(
             'Si le scroll est difficile, coupe le Mode drag. '
@@ -167,13 +173,16 @@ class _FullGuideTab extends StatelessWidget {
         ),
         SizedBox(height: 12),
         _InfoCard(
-          title: 'Composants',
+          title: 'Composants (36 types)',
           child: Text(
-            'Ajoute des composants UI via la barre de recherche intégrée dans la feuille. '
-            'Composants disponibles : Text, Button, Card, Image, TextField, AppBar, Switch, Checkbox, '
-            'Progress Bar, Badge, Container, Icon Button, FAB, Bottom Nav, Tab Bar, Banner, Stat Card, '
-            'Circular Progress, Slider, Radio Group, Dropdown, List Tile, Search Bar, Rating Stars, '
-            'Carousel, Date Picker, Nav Drawer, Stepper, Bottom Sheet.',
+            'Ajoute des composants UI via la barre de recherche intégrée (filtre en temps réel). '
+            'Basiques : Text, Button, Card, Image, TextField, AppBar, Icon, Divider, Avatar, Chip. '
+            'Formulaires : Switch, Checkbox, Slider, Radio Group, Dropdown, Date Picker. '
+            'Navigation : Bottom Nav, Tab Bar, Nav Drawer, FAB, Icon Button. '
+            'Affichage : Badge, Container, Banner, Stat Card, Progress Bar, Circular Progress, '
+            'List Tile, Search Bar, Rating Stars, Carousel, Stepper, Bottom Sheet. '
+            'Nouveaux : Segmented Button, Expansion Tile, Alert Dialog, Snackbar, Data Table, Skeleton. '
+            'Annotation : post-it de design (non exporté en Flutter).',
           ),
         ),
         SizedBox(height: 12),
@@ -231,6 +240,63 @@ class _FullGuideTab extends StatelessWidget {
           title: 'Zoom Pinch Preview',
           child: Text(
             "Active Zoom pinch preview depuis Plus actions pour pincer l'aperçu et zoomer/dézoomer (0.4× à 3×).",
+          ),
+        ),
+        SizedBox(height: 12),
+        _InfoCard(
+          title: 'Preview Sombre',
+          child: Text(
+            "Active Preview sombre depuis Plus actions pour voir le rendu en dark mode sans modifier le projet.",
+          ),
+        ),
+        SizedBox(height: 12),
+        _InfoCard(
+          title: 'Guides Manuels',
+          child: Text(
+            "Ajoute des guides horizontaux ou verticaux depuis Plus actions. "
+            "Les guides apparaissent en rouge sur la preview. "
+            "Efface-les tous avec Effacer les guides.",
+          ),
+        ),
+        SizedBox(height: 12),
+        _InfoCard(
+          title: 'Auto-layout',
+          child: Text(
+            "Sur un composant Container, la section Auto-layout dans Propriétés "
+            "permet d'arranger ses enfants en Rangee (horizontal) ou Colonne (vertical) "
+            "avec un espacement configurable.",
+          ),
+        ),
+        SizedBox(height: 12),
+        _InfoCard(
+          title: 'Annotations',
+          child: Text(
+            "Le composant Annotation est un post-it jaune pour les notes de design. "
+            "Non exporté dans le code Flutter.",
+          ),
+        ),
+        SizedBox(height: 12),
+        _InfoCard(
+          title: 'Design Tokens',
+          child: Text(
+            "Plus actions > Design tokens : applique une couleur accent et une couleur fond "
+            "à tous les composants non verrouillés en un clic.",
+          ),
+        ),
+        SizedBox(height: 12),
+        _InfoCard(
+          title: 'Multi-Ecrans',
+          child: Text(
+            "Plus actions > Multi-ecrans cote a cote : affiche tous les écrans du projet "
+            "en vue horizontale scrollable, chacun dans son device frame.",
+          ),
+        ),
+        SizedBox(height: 12),
+        _InfoCard(
+          title: 'Mode Présentation',
+          child: Text(
+            "Plus actions > Mode presentation : slideshow de tes écrans. "
+            "Choisis l'intervalle (2s/3s/5s/10s) et active la lecture automatique.",
           ),
         ),
         SizedBox(height: 12),

@@ -107,6 +107,9 @@ class PropertyPanel extends StatelessWidget {
     final responsiveWidthMode =
         (props['responsiveWidthMode'] as String?) ?? 'fixed';
     final responsiveAlign = (props['responsiveAlign'] as String?) ?? 'inherit';
+    final autoLayout = (props['autoLayout'] as String?) ?? 'none';
+    final childSpacing =
+        ((props['childSpacing'] as num?) ?? 8.0).toDouble();
     final actionType = (props['actionType'] as String?) ?? 'none';
     final targetScreenId = (props['targetScreenId'] as String?) ?? '';
     final imagePath = (props['imagePath'] as String?) ?? '';
@@ -346,6 +349,28 @@ class PropertyPanel extends StatelessWidget {
                 onUpdateProperty('alignment', selection.first);
               },
             ),
+            if (component?.type.name == 'containerBox') ...[
+              const _SectionTitle(title: 'Auto-layout'),
+              DropdownButtonFormField<String>(
+                key: ValueKey('autoLayout_$autoLayout'),
+                initialValue: autoLayout,
+                decoration: const InputDecoration(labelText: 'Direction'),
+                items: const [
+                  DropdownMenuItem(value: 'none', child: Text('Aucun')),
+                  DropdownMenuItem(value: 'row', child: Text('Rangee (horizontal)')),
+                  DropdownMenuItem(value: 'column', child: Text('Colonne (vertical)')),
+                ],
+                onChanged: (v) => onUpdateProperty('autoLayout', v ?? 'none'),
+              ),
+              if (autoLayout != 'none')
+                _SliderField(
+                  label: 'Espacement enfants',
+                  value: childSpacing,
+                  min: 0,
+                  max: 40,
+                  onChanged: (v) => onUpdateProperty('childSpacing', v),
+                ),
+            ],
             const _SectionTitle(title: 'Responsive'),
             DropdownButtonFormField<String>(
               initialValue: responsiveVisibility,

@@ -291,6 +291,78 @@ class UIComponentModel {
             height: 120,
           )..['subtitle'] = 'Contenu du bottom sheet',
         );
+      case ComponentType.segmentedButton:
+        return UIComponentModel(
+          id: id,
+          type: type,
+          properties: _baseProperties(
+            text: 'Option A,Option B,Option C',
+            width: 280,
+            height: 46,
+          ),
+        );
+      case ComponentType.expansionTile:
+        return UIComponentModel(
+          id: id,
+          type: type,
+          properties: _baseProperties(
+            text: 'Section repliable',
+            width: 300,
+            height: 56,
+          )..['subtitle'] = 'Contenu masque',
+        );
+      case ComponentType.alertDialog:
+        return UIComponentModel(
+          id: id,
+          type: type,
+          properties: _baseProperties(
+            text: 'Titre de la boite',
+            width: 300,
+            height: 160,
+          )..['subtitle'] = 'Message de confirmation',
+        );
+      case ComponentType.snackbarPreview:
+        return UIComponentModel(
+          id: id,
+          type: type,
+          properties: _baseProperties(
+            text: 'Action effectuee avec succes',
+            width: 320,
+            height: 52,
+          ),
+        );
+      case ComponentType.dataTable:
+        return UIComponentModel(
+          id: id,
+          type: type,
+          properties: _baseProperties(
+            text: 'Nom,Age,Ville',
+            width: 320,
+            height: 160,
+          )..['subtitle'] = 'Alice,30,Paris|Bob,25,Lyon|Clara,28,Nantes',
+        );
+      case ComponentType.skeleton:
+        return UIComponentModel(
+          id: id,
+          type: type,
+          properties: _baseProperties(
+            text: 'Chargement...',
+            width: 280,
+            height: 120,
+          ),
+        );
+      case ComponentType.annotation:
+        return UIComponentModel(
+          id: id,
+          type: type,
+          properties: _baseProperties(
+            text: 'Note de design',
+            width: 200,
+            height: 80,
+          )
+            ..['color'] = 0xFF856404
+            ..['backgroundColor'] = 0xFFFFF9C4,
+        );
     }
   }
 
@@ -338,6 +410,8 @@ class UIComponentModel {
       'imagePath': '',
       'offsetX': 0.0,
       'offsetY': 0.0,
+      'autoLayout': 'none',
+      'childSpacing': 8.0,
     };
   }
 
@@ -373,6 +447,8 @@ class UIComponentModel {
     rawProperties.putIfAbsent('responsiveAlign', () => 'inherit');
     rawProperties.putIfAbsent('offsetX', () => 0.0);
     rawProperties.putIfAbsent('offsetY', () => 0.0);
+    rawProperties.putIfAbsent('autoLayout', () => 'none');
+    rawProperties.putIfAbsent('childSpacing', () => 8.0);
     return UIComponentModel(
       id: json['id'] as String,
       type: ComponentTypeX.fromValue(json['type'] as String? ?? ''),

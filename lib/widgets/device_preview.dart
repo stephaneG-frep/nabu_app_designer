@@ -20,6 +20,9 @@ class DevicePreview extends StatelessWidget {
     this.frameMaxWidth = 390,
     this.onNavigateToScreen,
     this.onMoveComponentBefore,
+    this.previewBrightness,
+    this.hGuides = const [],
+    this.vGuides = const [],
   });
 
   final ScreenModel? screen;
@@ -36,6 +39,9 @@ class DevicePreview extends StatelessWidget {
   final ValueChanged<String>? onNavigateToScreen;
   final Future<void> Function(String draggedId, String targetId)?
   onMoveComponentBefore;
+  final Brightness? previewBrightness;
+  final List<double> hGuides;
+  final List<double> vGuides;
 
   @override
   Widget build(BuildContext context) {
@@ -43,13 +49,30 @@ class DevicePreview extends StatelessWidget {
     final isLandscape =
         MediaQuery.of(context).orientation == Orientation.landscape;
 
+    Widget wrapTheme(Widget child) {
+      if (previewBrightness == null) return child;
+      final base = Theme.of(context);
+      return Theme(
+        data: base.copyWith(
+          brightness: previewBrightness,
+          scaffoldBackgroundColor: previewBrightness == Brightness.dark
+              ? const Color(0xFF121212)
+              : Colors.white,
+          colorScheme: previewBrightness == Brightness.dark
+              ? base.colorScheme.copyWith(brightness: Brightness.dark)
+              : base.colorScheme.copyWith(brightness: Brightness.light),
+        ),
+        child: child,
+      );
+    }
+
     if (!showDeviceFrame) {
-      return Container(
+      return wrapTheme(Container(
         width: double.infinity,
         height: double.infinity,
         color: bgColor,
-        child: _buildCanvas(context),
-      );
+        child: _buildCanvasWithGuides(context),
+      ));
     }
 
     final effectiveMaxWidth = isLandscape ? frameMaxWidth * 1.8 : frameMaxWidth;
@@ -77,13 +100,13 @@ class DevicePreview extends StatelessWidget {
                 ),
               ),
             ),
-            Expanded(child: _buildCanvas(context)),
+            Expanded(child: _buildCanvasWithGuides(context)),
           ],
         ),
       ),
     );
 
-    return Container(
+    return wrapTheme(Container(
       constraints: BoxConstraints(maxWidth: effectiveMaxWidth),
       decoration: BoxDecoration(
         color: const Color(0xFF0F172A),
@@ -100,6 +123,23 @@ class DevicePreview extends StatelessWidget {
       child: isLandscape
           ? AspectRatio(aspectRatio: 19.5 / 9, child: shell)
           : shell,
+    ));
+  }
+
+  Widget _buildCanvasWithGuides(BuildContext context) {
+    final canvas = _buildCanvas(context);
+    if (hGuides.isEmpty && vGuides.isEmpty) return canvas;
+    return Stack(
+      children: [
+        canvas,
+        Positioned.fill(
+          child: IgnorePointer(
+            child: CustomPaint(
+              painter: _GuidesPainter(hGuides: hGuides, vGuides: vGuides),
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -216,6 +256,52 @@ class DevicePreview extends StatelessWidget {
     final children =
         childrenByParent[component.id] ?? const <UIComponentModel>[];
 
+    final autoLayout =
+        (component.properties['autoLayout'] as String?) ?? 'none';
+    final childSpacing =
+        ((component.properties['childSpacing'] as num?) ?? 8.0).toDouble();
+
+    if (autoLayout != 'none' && children.isNotEmpty) {
+      final childWidgets = children.map((child) {
+        if (path.contains(child.id)) {
+          return const Text('Cycle parent/enfant');
+        }
+        return _buildTreeNode(
+          child,
+          childrenByParent: childrenByParent,
+          depth: depth + 1,
+          ancestry: path,
+        );
+      }).toList();
+
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildSlot(component, allowDrag: depth == 0),
+          Padding(
+            padding: EdgeInsets.only(top: childSpacing * 0.5),
+            child: autoLayout == 'row'
+                ? Wrap(
+                    spacing: childSpacing,
+                    runSpacing: childSpacing,
+                    children: childWidgets,
+                  )
+                : Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: childWidgets
+                        .map(
+                          (w) => Padding(
+                            padding: EdgeInsets.only(bottom: childSpacing),
+                            child: w,
+                          ),
+                        )
+                        .toList(),
+                  ),
+          ),
+        ],
+      );
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -284,6 +370,31 @@ class DevicePreview extends StatelessWidget {
 
     return () => onNavigateToScreen!(target);
   }
+}
+
+class _GuidesPainter extends CustomPainter {
+  _GuidesPainter({required this.hGuides, required this.vGuides});
+  final List<double> hGuides;
+  final List<double> vGuides;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = const Color(0xFFE53935).withValues(alpha: 0.7)
+      ..strokeWidth = 1.0;
+    for (final fy in hGuides) {
+      final y = fy.clamp(0.0, 1.0) * size.height;
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), paint);
+    }
+    for (final fx in vGuides) {
+      final x = fx.clamp(0.0, 1.0) * size.width;
+      canvas.drawLine(Offset(x, 0), Offset(x, size.height), paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(_GuidesPainter old) =>
+      old.hGuides != hGuides || old.vGuides != vGuides;
 }
 
 class _GridPainter extends CustomPainter {

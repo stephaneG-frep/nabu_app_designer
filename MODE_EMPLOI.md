@@ -40,7 +40,13 @@ Dans la barre des écrans :
 
 - Bouton `Ajouter composant`
 - **Barre de recherche** en haut de la feuille : filtre les composants en temps réel par nom.
-- Composants disponibles : Text, Button, Card, Image placeholder, TextField, AppBar, Switch, Checkbox, Progress Bar, Badge, Container, Icon Button, FAB, Bottom Nav, Tab Bar, Banner, Stat Card, Circular Progress, Slider, Radio Group, Dropdown, List Tile, Search Bar, Rating Stars, **Carousel**, **Date Picker**, **Nav Drawer**, **Stepper**, **Bottom Sheet**.
+- **36 composants** disponibles :
+  - Basiques : Text, Button, Card, Image, TextField, AppBar, Icon, Divider, Avatar, Chip
+  - Formulaires : Switch, Checkbox, Slider, Radio Group, Dropdown, Date Picker
+  - Navigation : Bottom Nav, Tab Bar, Nav Drawer, FAB, Icon Button
+  - Affichage : Badge, Container, Banner, Stat Card, Progress Bar, Circular Progress, List Tile, Search Bar, Rating Stars, Carousel, Stepper, Bottom Sheet
+  - Nouveaux : **Segmented Button**, **Expansion Tile**, **Alert Dialog**, **Snackbar**, **Data Table**, **Skeleton**
+  - **Annotation** : post-it de design (non exporté en code Flutter)
 - Dans cette feuille, tu retrouves aussi `Mes templates` (templates persos).
 
 ## 6. Sélection, multi-sélection, calques
@@ -230,14 +236,74 @@ Dans `Plus d'actions > Exporter aperçu PNG` :
 - Capture l'aperçu mobile en image PNG.
 - Ouvre le menu de partage Android (enregistrer, envoyer par mail, etc.).
 
-## 21. Conseils pratiques
+## 21. Auto-layout (Container)
+
+Dans `Propriétés > Auto-layout` (visible uniquement sur un composant **Container**) :
+
+- `Aucun` : comportement par défaut (enfants en liste verticale indentée)
+- `Rangée (horizontal)` : enfants côte à côte avec espacement configurable
+- `Colonne (vertical)` : enfants empilés verticalement avec espacement configurable
+- `Espacement enfants` : slider de 0 à 40 px entre les éléments
+
+## 22. Annotations (post-its)
+
+Le composant **Annotation** (icône post-it dans Ajouter composant) permet d'ajouter des notes de design directement sur l'écran :
+
+- Rendu en fond jaune avec icône épingle
+- Modifiable comme tout composant (texte, taille, position)
+- **Non exporté** dans le code Flutter généré
+
+## 23. Preview sombre
+
+Dans `Plus d'actions > Preview sombre` :
+
+- Bascule l'aperçu en dark mode sans modifier le projet.
+- Coché = preview sombre activée, décoché = preview normale.
+
+## 24. Guides manuels
+
+Dans `Plus d'actions` :
+
+- `Ajouter guide horizontal` : ajoute une ligne rouge horizontale au centre de la preview.
+- `Ajouter guide vertical` : ajoute une ligne rouge verticale au centre de la preview.
+- `Effacer les guides` : supprime tous les guides affichés.
+
+Les guides sont superposés à la preview (non exportés, non visibles dans le plein écran).
+
+## 25. Design tokens (couleur globale)
+
+Dans `Plus d'actions > Design tokens (couleur globale)` :
+
+- Choisis une **couleur accent** parmi 6 teintes prédéfinies.
+- Choisis une **couleur de fond** parmi 6 options.
+- Applique les deux couleurs à **tous les composants non verrouillés** de l'écran actif en un clic.
+
+## 26. Multi-écrans côte à côte
+
+Dans `Plus d'actions > Multi-ecrans cote a cote` :
+
+- Affiche tous les écrans du projet en vue horizontale scrollable.
+- Chaque écran est affiché dans son device frame avec son nom.
+- Utile pour comparer les écrans et vérifier la cohérence visuelle.
+
+## 27. Mode présentation (slideshow)
+
+Dans `Plus d'actions > Mode presentation` :
+
+- Lance un slideshow de tous les écrans du projet.
+- **Lecture auto** : icône play en haut à droite pour avancer automatiquement.
+- **Intervalle** : menu déroulant 2s / 3s / 5s / 10s.
+- **Navigation manuelle** : flèches gauche/droite ou tap sur les points de navigation.
+- Navigation interactive : les boutons avec `Action au tap > Naviguer vers` fonctionnent.
+
+## 28. Conseils pratiques
 
 - Pour éditer vite : utilise le panneau calques + multi-sélection + recherche.
 - Pour éviter les erreurs : verrouille les éléments finalisés.
 - Pour réorganiser proprement : active `Mode drag`, puis `Mode grille + snap`.
 - Pour présenter : utilise `Plein écran`.
 
-## 22. Dépannage rapide
+## 29. Dépannage rapide
 
 - Si le scroll est difficile : désactive `Mode drag`.
 - Si un composant ne bouge pas : vérifie qu'il n'est pas verrouillé.

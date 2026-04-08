@@ -661,6 +661,34 @@ Padding(
         ],
       ),
     )''');
+      case ComponentType.segmentedButton:
+        return wrapped(
+          "// SegmentedButton: $text",
+        );
+      case ComponentType.expansionTile:
+        return wrapped(
+          "ExpansionTile(title: Text('$text'), children: [Text('$subtitle')])",
+        );
+      case ComponentType.alertDialog:
+        return wrapped(
+          "// AlertDialog preview: $text",
+        );
+      case ComponentType.snackbarPreview:
+        return wrapped(
+          "// Snackbar preview: $text",
+        );
+      case ComponentType.dataTable:
+        return wrapped(
+          "// DataTable: $text",
+        );
+      case ComponentType.skeleton:
+        return wrapped(
+          "// Skeleton placeholder",
+        );
+      case ComponentType.annotation:
+        return wrapped(
+          "// Annotation: $text",
+        );
     }
   }
 

@@ -21,6 +21,8 @@ import '../widgets/property_panel.dart';
 import '../widgets/screen_tabs.dart';
 import 'full_preview_screen.dart';
 import 'help_screen.dart';
+import 'multi_screen_preview_screen.dart';
+import 'presentation_screen.dart';
 import 'user_flow_screen.dart';
 
 class EditorScreen extends StatefulWidget {
@@ -39,6 +41,9 @@ class _EditorScreenState extends State<EditorScreen> {
   bool _gridSnapEnabled = false;
   bool _dragModeEnabled = false;
   bool _zoomEnabled = false;
+  bool _previewDark = false;
+  final List<double> _hGuides = [];
+  final List<double> _vGuides = [];
   _PreviewSizeMode _previewSizeMode = _PreviewSizeMode.normal;
   static const int _gridColumns = 2;
   final GlobalKey _previewRepaintKey = GlobalKey();
@@ -196,6 +201,31 @@ class _EditorScreenState extends State<EditorScreen> {
                   break;
                 case _EditorMenuAction.applyThemePreset:
                   _showThemePresetPicker(context);
+                  break;
+                case _EditorMenuAction.applyDesignToken:
+                  _showDesignTokenPicker(context);
+                  break;
+                case _EditorMenuAction.toggleDarkPreview:
+                  setState(() => _previewDark = !_previewDark);
+                  break;
+                case _EditorMenuAction.addGuideH:
+                  setState(() => _hGuides.add(0.5));
+                  break;
+                case _EditorMenuAction.addGuideV:
+                  setState(() => _vGuides.add(0.5));
+                  break;
+                case _EditorMenuAction.clearGuides:
+                  setState(() { _hGuides.clear(); _vGuides.clear(); });
+                  break;
+                case _EditorMenuAction.openMultiPreview:
+                  Navigator.of(context).push(MaterialPageRoute<void>(
+                    builder: (_) => MultiScreenPreviewScreen(projectId: project.id),
+                  ));
+                  break;
+                case _EditorMenuAction.openPresentation:
+                  Navigator.of(context).push(MaterialPageRoute<void>(
+                    builder: (_) => PresentationScreen(projectId: project.id),
+                  ));
                   break;
                 case _EditorMenuAction.duplicate:
                   provider.duplicateSelectedComponent();
@@ -363,6 +393,37 @@ class _EditorScreenState extends State<EditorScreen> {
               const PopupMenuItem(
                 value: _EditorMenuAction.applyThemePreset,
                 child: Text('Appliquer un preset theme'),
+              ),
+              const PopupMenuItem(
+                value: _EditorMenuAction.applyDesignToken,
+                child: Text('Design tokens (couleur globale)'),
+              ),
+              CheckedPopupMenuItem(
+                value: _EditorMenuAction.toggleDarkPreview,
+                checked: _previewDark,
+                child: const Text('Preview sombre'),
+              ),
+              const PopupMenuDivider(),
+              const PopupMenuItem(
+                value: _EditorMenuAction.addGuideH,
+                child: Text('Ajouter guide horizontal'),
+              ),
+              const PopupMenuItem(
+                value: _EditorMenuAction.addGuideV,
+                child: Text('Ajouter guide vertical'),
+              ),
+              const PopupMenuItem(
+                value: _EditorMenuAction.clearGuides,
+                child: Text('Effacer les guides'),
+              ),
+              const PopupMenuDivider(),
+              const PopupMenuItem(
+                value: _EditorMenuAction.openMultiPreview,
+                child: Text('Multi-ecrans cote a cote'),
+              ),
+              const PopupMenuItem(
+                value: _EditorMenuAction.openPresentation,
+                child: Text('Mode presentation'),
               ),
               PopupMenuItem(
                 value: _EditorMenuAction.groupSelection,
@@ -671,6 +732,9 @@ class _EditorScreenState extends State<EditorScreen> {
                         previewKey: _previewRepaintKey,
                         onCopyStyle: () => _copyStyle(context),
                         onPasteStyle: () => _pasteStyle(context),
+                        previewDark: _previewDark,
+                        hGuides: _hGuides,
+                        vGuides: _vGuides,
                       )
                     : _NarrowLayout(
                         provider: provider,
@@ -684,6 +748,9 @@ class _EditorScreenState extends State<EditorScreen> {
                         previewKey: _previewRepaintKey,
                         onCopyStyle: () => _copyStyle(context),
                         onPasteStyle: () => _pasteStyle(context),
+                        previewDark: _previewDark,
+                        hGuides: _hGuides,
+                        vGuides: _vGuides,
                       ),
               ),
             ],
@@ -1646,6 +1713,122 @@ class _EditorScreenState extends State<EditorScreen> {
     );
   }
 
+  Future<void> _showDesignTokenPicker(BuildContext context) async {
+    final provider = context.read<ProjectProvider>();
+    int accentValue = 0xFF2A9D8F;
+    int bgValue = 0xFFE8F4F2;
+
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (ctx, setS) => AlertDialog(
+          title: const Text('Design tokens'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'Choisir deux couleurs a appliquer a tous les composants non verrouilles.',
+                style: TextStyle(fontSize: 13),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  const Text('Accent :'),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        0xFF2A9D8F, 0xFF1565C0, 0xFF6A1B9A,
+                        0xFFE53935, 0xFFEF6C00, 0xFF212121,
+                      ].map((c) {
+                        final selected = c == accentValue;
+                        return GestureDetector(
+                          onTap: () => setS(() => accentValue = c),
+                          child: Container(
+                            width: 32,
+                            height: 32,
+                            decoration: BoxDecoration(
+                              color: Color(c),
+                              shape: BoxShape.circle,
+                              border: selected
+                                  ? Border.all(
+                                      color: Colors.black,
+                                      width: 3,
+                                    )
+                                  : null,
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  const Text('Fond :  '),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        0xFFFFFFFF, 0xFFE8F4F2, 0xFFE3F2FD,
+                        0xFFF3E5F5, 0xFFFFF9C4, 0xFF121212,
+                      ].map((c) {
+                        final selected = c == bgValue;
+                        return GestureDetector(
+                          onTap: () => setS(() => bgValue = c),
+                          child: Container(
+                            width: 32,
+                            height: 32,
+                            decoration: BoxDecoration(
+                              color: Color(c),
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: selected
+                                    ? Colors.black
+                                    : Colors.grey.shade300,
+                                width: selected ? 3 : 1,
+                              ),
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Annuler'),
+            ),
+            FilledButton(
+              onPressed: () async {
+                Navigator.of(dialogContext).pop();
+                await provider.applyDesignToken(
+                  accentColor: accentValue,
+                  backgroundColor: bgValue,
+                );
+                if (!context.mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Design tokens appliques.')),
+                );
+              },
+              child: const Text('Appliquer'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   void _openUserFlow(BuildContext context) {
     final provider = context.read<ProjectProvider>();
     final project = provider.activeProject;
@@ -1871,6 +2054,13 @@ enum _EditorMenuAction {
   unlockSelection,
   exportPng,
   applyThemePreset,
+  applyDesignToken,
+  toggleDarkPreview,
+  addGuideH,
+  addGuideV,
+  clearGuides,
+  openMultiPreview,
+  openPresentation,
   addTemplateScreen,
   openTemplateLibrary,
   exportJson,
@@ -1901,6 +2091,9 @@ class _WideLayout extends StatelessWidget {
     required this.previewKey,
     required this.onCopyStyle,
     required this.onPasteStyle,
+    required this.previewDark,
+    required this.hGuides,
+    required this.vGuides,
   });
 
   final ProjectProvider provider;
@@ -1913,6 +2106,9 @@ class _WideLayout extends StatelessWidget {
   final GlobalKey previewKey;
   final VoidCallback onCopyStyle;
   final VoidCallback onPasteStyle;
+  final bool previewDark;
+  final List<double> hGuides;
+  final List<double> vGuides;
 
   @override
   Widget build(BuildContext context) {
@@ -1950,6 +2146,9 @@ class _WideLayout extends StatelessWidget {
               snapToGrid: gridSnapEnabled,
               gridColumns: gridColumns,
             ),
+        previewBrightness: previewDark ? Brightness.dark : null,
+        hGuides: hGuides,
+        vGuides: vGuides,
       ),
     );
 
@@ -2027,6 +2226,9 @@ class _NarrowLayout extends StatelessWidget {
     required this.previewKey,
     required this.onCopyStyle,
     required this.onPasteStyle,
+    required this.previewDark,
+    required this.hGuides,
+    required this.vGuides,
   });
 
   final ProjectProvider provider;
@@ -2039,6 +2241,9 @@ class _NarrowLayout extends StatelessWidget {
   final GlobalKey previewKey;
   final VoidCallback onCopyStyle;
   final VoidCallback onPasteStyle;
+  final bool previewDark;
+  final List<double> hGuides;
+  final List<double> vGuides;
 
   @override
   Widget build(BuildContext context) {
@@ -2077,6 +2282,9 @@ class _NarrowLayout extends StatelessWidget {
                   snapToGrid: gridSnapEnabled,
                   gridColumns: gridColumns,
                 ),
+            previewBrightness: previewDark ? Brightness.dark : null,
+            hGuides: hGuides,
+            vGuides: vGuides,
           ),
         );
 
